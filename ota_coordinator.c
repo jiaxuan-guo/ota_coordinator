@@ -19,12 +19,29 @@ typedef struct {
     char tty_write[256];
 } PCI_TTY_Config;
 
+
+void find_tty_by_pci_addr_helper(struct dirent *entry, char* tty, int *count) {
+    char path[256];
+    DIR *tty_dir;
+    struct dirent *tty_entry;
+
+    snprintf(path, sizeof(path), "%s/%s/tty", SYSFS_PCI_DEVICES, entry->d_name);
+    tty_dir = opendir(path);
+    if (tty_dir) {
+        while ((tty_entry = readdir(tty_dir)) != NULL) {
+            if (strncmp(tty_entry->d_name, "tty", 3) == 0) {
+                snprintf(tty, 4+sizeof(tty_entry->d_name), "/dev/%s", tty_entry->d_name);
+                closedir(tty_dir);
+                ++(*count);
+                return;
+            }
+        }
+    }
+}
+
 int find_tty_by_pci_addr(PCI_TTY_Config *config) {
     DIR *dir;
     struct dirent *entry;
-    struct dirent *tty_entry;
-    DIR *tty_dir;
-    char path[256];
     int ret = -2;
 
     // Open the PCI devices directory
@@ -38,31 +55,9 @@ int find_tty_by_pci_addr(PCI_TTY_Config *config) {
     while ((entry = readdir(dir)) != NULL) {
         if (entry->d_type == DT_LNK) {
             if (strcmp(entry->d_name, config->pci_read) == 0){
-                snprintf(path, sizeof(path), "%s/%s/tty", SYSFS_PCI_DEVICES, entry->d_name);
-                tty_dir = opendir(path);
-                if (tty_dir) {
-                    while ((tty_entry = readdir(tty_dir)) != NULL) {
-                        if (strncmp(tty_entry->d_name, "tty", 3) == 0) {
-                            snprintf(config->tty_read, sizeof(config->tty_read), "/dev/%s", tty_entry->d_name);
-                            ++ret;
-                            closedir(tty_dir);
-                            break;
-                        }
-                    }
-                }
+                find_tty_by_pci_addr_helper(entry, config->tty_read, &ret);
             } else if (strcmp(entry->d_name, config->pci_write) == 0){
-                snprintf(path, sizeof(path), "%s/%s/tty", SYSFS_PCI_DEVICES, entry->d_name);
-                tty_dir = opendir(path);
-                if (tty_dir) {
-                    while ((tty_entry = readdir(tty_dir)) != NULL) {
-                        if (strncmp(tty_entry->d_name, "tty", 3) == 0) {
-                            snprintf(config->tty_write, sizeof(config->tty_write), "/dev/%s", tty_entry->d_name);
-                            ++ret;
-                            closedir(tty_dir);
-                            break;
-                        }
-                    }
-                }
+                find_tty_by_pci_addr_helper(entry, config->tty_write, &ret);
             }
         }
     }
@@ -95,7 +90,9 @@ void config_uart(int fd, int isICANON) {
 int main() {
     int fd_read;
     int fd_write;
-
+    struct pollfd fds[1];
+    int poll_result;
+    char buf[256];
     PCI_TTY_Config config = {
         .pci_read  = "0000:00:0f.0",
         .pci_write = "0000:00:13.0",
@@ -103,17 +100,19 @@ int main() {
         .tty_write = "",
     };
 
+    // open both read and write tty devices
     if (find_tty_by_pci_addr(&config) == 0) {
-        printf("<config>\npci_read:%s, tty_read:%s,\npci_write:%s, tty_write:%s\n",
+        printf("<config>\npci_read:%s  tty_read:%s \npci_write:%s  tty_write:%s\n",
         config.pci_read, config.tty_read, config.pci_write, config.tty_write);
+
         fd_read = open(config.tty_read, O_RDWR | O_NOCTTY);
         if (fd_read == -1) {
-            perror("open");
+            perror("open fd_read");
             return EXIT_FAILURE;
         }
         fd_write = open(config.tty_write, O_RDWR | O_NOCTTY);
         if (fd_write == -1) {
-            perror("open");
+            perror("open fd_write");
             return EXIT_FAILURE;
         }
     } else {
@@ -121,6 +120,7 @@ int main() {
         return EXIT_FAILURE;
     }
 
+    // set uart configs
     config_uart(fd_write, 1);
     config_uart(fd_read, 0);
 
@@ -134,15 +134,12 @@ int main() {
         tcdrain(fd_write);
     }
 
-    struct pollfd fds[1];
     fds[0].fd = fd_read;
     fds[0].events = POLLIN;
 
    while(1) {
-        char buf[256];
         memset(buf, 0, sizeof(buf));
-
-        int poll_result = poll(fds, 1, -1); // Wait indefinitely for data
+        poll_result = poll(fds, 1, -1); // Wait indefinitely for data
 
         if (poll_result > 0) {
             if (fds[0].revents & POLLIN) {
@@ -150,16 +147,13 @@ int main() {
 
                 if (n < 0) {
                     perror("Read failed -");
-                    return -1;
+                    return EXIT_FAILURE;
                 } else if (n > 0) {
-                    printf("Received n(%d):  %s\n", n,buf);
+                    printf("Received n(%d) bytes:  %s\n", n, buf);
                 }
             }
         }
     }
-
-
-
 
     close(fd_read);
     close(fd_write);
