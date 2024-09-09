@@ -4,6 +4,7 @@
 #define SYSFS_PCI_DEVICES "/sys/bus/pci/devices"
 #define BAUD_RATE B115200 //for both read and write
 #define BOOTLOADER_MESSAGE_OFFSET_IN_MISC 0
+#define OTA_PACKAGE "/data/ota/xxx.zip"
 
 int send_message(int fd, const char *message) {
     int n = write(fd, message, strlen(message));
@@ -173,9 +174,18 @@ int handle_start_ota(PCI_TTY_Config *config) {
 
 // remove package and drop this update
 int handle_ota_package_not_ready(PCI_TTY_Config *config){
+
     if (config == NULL) {
         printf("");
     }
+
+    if (remove(OTA_PACKAGE) == 0) {
+        printf("File %s deleted successfully.\n", OTA_PACKAGE);
+    } else {
+        perror("remove");
+        return -1;
+    }
+
     return 0;
 }
 
@@ -213,6 +223,34 @@ int handle_responses(char *buf) {
     }
 }
 
+int build_connection(PCI_TTY_Config *config) {
+    // open both read and write tty devices
+    if (find_tty_by_pci_addr(config) == 0) {
+        printf("\n<config>\npci_read:%s  tty_read:%s \npci_write:%s  tty_write:%s\n",
+        config->pci_read, config->tty_read, config->pci_write, config->tty_write);
+
+        config->fd_read = open(config->tty_read, O_RDWR | O_NOCTTY);
+        if (config->fd_read == -1) {
+            perror("open fd_read");
+            return -1;
+        }
+        config->fd_write = open(config->tty_write, O_RDWR | O_NOCTTY);
+        if (config->fd_write == -1) {
+            perror("open fd_write");
+            return -1;
+        }
+    } else {
+        perror("TTY devices not found for the given PCI addr.\n");
+        return -1;
+    }
+
+    // set uart configs
+    config_uart(config.fd_write, 1);
+    config_uart(config.fd_read, 0);
+
+    return 0;
+}
+
 int main(int argc, char* argv[]) {
     char buf[256];
     PCI_TTY_Config config;
@@ -226,30 +264,10 @@ int main(int argc, char* argv[]) {
 
     config.pci_read = argv[1];
     config.pci_write = argv[2];
-
-    // open both read and write tty devices
-    if (find_tty_by_pci_addr(&config) == 0) {
-        printf("\n<config>\npci_read:%s  tty_read:%s \npci_write:%s  tty_write:%s\n",
-        config.pci_read, config.tty_read, config.pci_write, config.tty_write);
-
-        config.fd_read = open(config.tty_read, O_RDWR | O_NOCTTY);
-        if (config.fd_read == -1) {
-            perror("open fd_read");
-            return EXIT_FAILURE;
-        }
-        config.fd_write = open(config.tty_write, O_RDWR | O_NOCTTY);
-        if (config.fd_write == -1) {
-            perror("open fd_write");
-            return EXIT_FAILURE;
-        }
-    } else {
-        perror("TTY devices not found for the given PCI addr.\n");
+    if (build_connection(&config)!=0) {
+        perror("Failed to build connection.\n")
         return EXIT_FAILURE;
     }
-
-    // set uart configs
-    config_uart(config.fd_write, 1);
-    config_uart(config.fd_read, 0);
 
     while(1) {
         memset(buf, 0, sizeof(buf));

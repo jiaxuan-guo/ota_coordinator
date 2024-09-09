@@ -55,6 +55,7 @@ void find_tty_by_pci_addr_helper(struct dirent *entry, char* tty, int *count);
 int find_tty_by_pci_addr(PCI_TTY_Config *config);
 int set_blocking(int fd);
 void config_uart(int fd, int isICANON);
+int build_connection(PCI_TTY_Config *config);
 
 // misc partition
 int write_recovery_to_bcb();
