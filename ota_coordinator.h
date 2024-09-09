@@ -17,6 +17,13 @@ typedef struct {
     int fd_write;
 } PCI_TTY_Config;
 
+enum Response{
+    START_OTA=0,
+    PACKAGE_READY,
+    PACKAGE_NOT_READY,
+    UNDEFIINED
+};
+
 typedef struct {
     char device[64];
     char mount_point[64];
@@ -41,16 +48,25 @@ typedef struct{
     // to 2048-byte.
 } bootloader_message;
 
+// tty settings
 int send_message(int fd, const char *message);
+int receive_message(int fd, char *buf, size_t size);
 void find_tty_by_pci_addr_helper(struct dirent *entry, char* tty, int *count);
 int find_tty_by_pci_addr(PCI_TTY_Config *config);
+int set_blocking(int fd);
 void config_uart(int fd, int isICANON);
-int handle_ota_package_ready(PCI_TTY_Config *config);
 
+// misc partition
 int write_recovery_to_bcb();
 int get_misc_blk_device(char *misc_blk_device);
 int get_bootloader_message(bootloader_message *boot, char* misc_blk_device);
 int read_misc_partition(void* buf, size_t size, char *misc_blk_device, size_t offset);
-int CommandIsPresent(bootloader_message* boot);
 int write_misc_partition(const void* buf, size_t size, char *misc_blk_device, size_t offset);
+int CommandIsPresent(bootloader_message* boot);
 int isprint(int c);
+
+// handle responses
+int handle_responses(char *buf);
+int handle_start_ota(PCI_TTY_Config *config);
+int handle_ota_package_ready(PCI_TTY_Config *config);
+int handle_ota_package_not_ready(PCI_TTY_Config *config);

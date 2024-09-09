@@ -11,7 +11,16 @@ int send_message(int fd, const char *message) {
         perror("Write failed - ");
         return -1;
     }
-    // tcdrain(fd);
+    tcdrain(fd);
+    printf("Sent: %s\n", message);
+    return 0;
+}
+
+int receive_message(int fd, char *buf, size_t size) {
+    if (read(fd, buf, size)==-1) {
+        perror("read error");
+        return -1;
+    }
     return 0;
 }
 
@@ -61,6 +70,20 @@ int find_tty_by_pci_addr(PCI_TTY_Config *config) {
     return ret;
 }
 
+int set_blocking(int fd) {
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags == -1) {
+        perror("fcntl");
+        return -1;
+    }
+    flags &= ~O_NONBLOCK;
+    if (fcntl(fd, F_SETFL, flags) == -1) {
+        perror("fcntl");
+        return -1;
+    }
+    return 0;
+}
+
 void config_uart(int fd, int isICANON) {
     struct termios options;
 
@@ -70,6 +93,7 @@ void config_uart(int fd, int isICANON) {
 
     options.c_cflag |= (CLOCAL | CREAD);
     options.c_cflag &= ~PARENB;
+    options.c_cflag &= ~CRTSCTS;
     options.c_cflag &= ~CSTOPB;
     options.c_cflag &= ~CSIZE;
     options.c_cflag |= CS8;
@@ -80,6 +104,7 @@ void config_uart(int fd, int isICANON) {
     options.c_oflag &= ~OPOST;
 
     tcsetattr(fd, TCSANOW, &options);
+    set_blocking(fd);
 }
 
 int isprint(int c) {
@@ -138,33 +163,60 @@ int write_recovery_to_bcb() {
     return 0;
 }
 
+int handle_start_ota(PCI_TTY_Config *config) {
+    if (send_message(config->fd_write, "need_to_ota\n")) {
+        perror("send_message failed!\n");
+        return -1;
+    }
+    return 0;
+}
+
+// remove package and drop this update
+int handle_ota_package_not_ready(PCI_TTY_Config *config){
+    if (config == NULL) {
+        printf("");
+    }
+    return 0;
+}
+
 //All VMs set the next boot target as recovery, notify SOS, shutdown
 int handle_ota_package_ready(PCI_TTY_Config *config) {
     //write recovery into BCB(bootloader control block)
     write_recovery_to_bcb();
 
     //notify SOS
-    if (send_message(config->fd_write, "vm_shutdown")) {
+    if (send_message(config->fd_write, "vm_shutdown\n")) {
         perror("send_message failed!\n");
         return EXIT_FAILURE;
     }
 
     // shutdown
-    int result = system("reboot -p");
-    if (result == -1) {
-        perror("system");
-        return 1;
-    } else {
-        printf("Script executed with exit status: %d\n", WEXITSTATUS(result));
-    }
+    // int result = system("reboot -p");
+    // if (result == -1) {
+    //     perror("system");
+    //     return 1;
+    // } else {
+    //     printf("Script executed with exit status: %d\n", WEXITSTATUS(result));
+    // }
     return 0;
 }
 
+int handle_responses(char *buf) {
+    if (strncmp(buf, "start_ota", sizeof("start_ota")-1)==0) {
+        return START_OTA;
+    } else if (strncmp(buf, "package_ready", sizeof("package_ready")-1)==0) {
+        return PACKAGE_READY;
+    } else if (strncmp(buf, "package_not_ready", sizeof("package_not_ready")-1) == 0) {
+        return PACKAGE_NOT_READY;
+    } else {
+        return UNDEFIINED;
+    }
+}
+
 int main(int argc, char* argv[]) {
-    // struct pollfd fds[1];
-    // int poll_result;
-    // char buf[256];
+    char buf[256];
     PCI_TTY_Config config;
+    enum Response response;
 
     if (argc != 3) {
         printf("<Usage>: %s <pci_read> <pci_write>\n", argv[0]);
@@ -172,12 +224,12 @@ int main(int argc, char* argv[]) {
         return EXIT_FAILURE;
     }
 
-    config.pci_read  = argv[1];
-    config.pci_write  = argv[2];
-#if 0
+    config.pci_read = argv[1];
+    config.pci_write = argv[2];
+
     // open both read and write tty devices
     if (find_tty_by_pci_addr(&config) == 0) {
-        printf("<config>\npci_read:%s  tty_read:%s \npci_write:%s  tty_write:%s\n",
+        printf("\n<config>\npci_read:%s  tty_read:%s \npci_write:%s  tty_write:%s\n",
         config.pci_read, config.tty_read, config.pci_write, config.tty_write);
 
         config.fd_read = open(config.tty_read, O_RDWR | O_NOCTTY);
@@ -199,46 +251,32 @@ int main(int argc, char* argv[]) {
     config_uart(config.fd_write, 1);
     config_uart(config.fd_read, 0);
 
-    // init message
-    if (send_message(config.fd_write, "hello\r\n")) {
-        perror("send_message failed!\n");
-        return EXIT_FAILURE;
-    }
-    tcdrain(config.fd_write);
-    if (send_message(config.fd_write, "need_to_ota\r\n")) {
-        perror("send_message failed!\n");
-        return EXIT_FAILURE;
-    }
-    fds[0].fd = config.fd_read;
-    fds[0].events = POLLIN;
-    tcdrain(config.fd_write);
-#endif
-    handle_ota_package_ready(&config);
-//    while(1) {
-//         memset(buf, 0, sizeof(buf));
-//         poll_result = poll(fds, 1, -1); // Wait indefinitely for data
+    while(1) {
+        memset(buf, 0, sizeof(buf));
 
-//         if (poll_result > 0) {
-//             if (fds[0].revents & POLLIN) {
-//                 int n = read(config.fd_read, buf, sizeof(buf) - 1);
-
-//                 if (n < 0) {
-//                     perror("Read failed -");
-//                     return EXIT_FAILURE;
-//                 } else if (n > 0) {
-//                     //handle
-//                     if (strncmp(buf, "package_ready", sizeof("package_ready")-1) == 0) {
-//                         printf("package ready\n");
-//                         handle_ota_package_ready(&config);
-//                     } else if (strncmp(buf, "package_not_ready", sizeof("package_not_ready")-1) == 0) {
-//                         printf("package_not_ready\n");
-//                     }
-//                 }
-//             }
-//         }
-//     }
+        if (receive_message(config.fd_read, buf, sizeof(buf) - 1)==0) {
+            //handle
+            response = handle_responses(buf);
+            printf("Received: code=%d, buf=%s\n", response, buf);
+            switch (response) {
+                case START_OTA:
+                // init message
+                    handle_start_ota(&config);
+                    break;
+                case PACKAGE_READY:
+                    handle_ota_package_ready(&config);
+                    break;
+                case PACKAGE_NOT_READY:
+                    handle_ota_package_not_ready(&config);
+                    break;
+                case UNDEFIINED:
+                    break;
+            }
+        }
+    }
 
     close(config.fd_read);
     close(config.fd_write);
     return EXIT_SUCCESS;
 }
+
