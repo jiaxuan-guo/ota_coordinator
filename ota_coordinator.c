@@ -6,20 +6,21 @@
 #define BOOTLOADER_MESSAGE_OFFSET_IN_MISC 0
 #define OTA_PACKAGE "/data/ota/xxx.zip"
 
+
 int send_message(int fd, const char *message) {
     int n = write(fd, message, strlen(message));
     if (n < 0) {
-        perror("Write failed - ");
+        ALOGE("Write failed - ");
         return -1;
     }
     tcdrain(fd);
-    printf("Sent: %s\n", message);
+    ALOGI("Sent: %s\n", message);
     return 0;
 }
 
 int receive_message(int fd, char *buf, size_t size) {
     if (read(fd, buf, size)==-1) {
-        perror("read error");
+        ALOGE("read error");
         return -1;
     }
     return 0;
@@ -52,7 +53,7 @@ int find_tty_by_pci_addr(PCI_TTY_Config *config) {
     // Open the PCI devices directory
     dir = opendir(SYSFS_PCI_DEVICES);
     if (!dir) {
-        perror("opendir");
+        ALOGE("opendir");
         return ret;
     }
 
@@ -74,12 +75,12 @@ int find_tty_by_pci_addr(PCI_TTY_Config *config) {
 int set_blocking(int fd) {
     int flags = fcntl(fd, F_GETFL, 0);
     if (flags == -1) {
-        perror("fcntl");
+        ALOGE("fcntl");
         return -1;
     }
     flags &= ~O_NONBLOCK;
     if (fcntl(fd, F_SETFL, flags) == -1) {
-        perror("fcntl");
+        ALOGE("fcntl");
         return -1;
     }
     return 0;
@@ -136,16 +137,16 @@ int write_recovery_to_bcb() {
     bootloader_message boot;
 
     if (get_misc_blk_device(misc_blk_device)==-1) {
-        perror("Failed to get_misc_blk_device\n");
+        ALOGE("Failed to get_misc_blk_device\n");
         return -1;
     }
-    printf("misc_blk_device: %s\n", misc_blk_device);
+    ALOGI("misc_blk_device: %s\n", misc_blk_device);
 
     if (get_bootloader_message(&boot, misc_blk_device)==-1) {
-        perror("Failed to get_misc_blk_device\n");
+        ALOGE("Failed to get_misc_blk_device\n");
         return -1;
     }
-    printf("<get_bootloader_message>\nboot.command: %s, boot.status: %s, boot.recovery: %s, boot.stage: %s\n",
+    ALOGI("<get_bootloader_message>\nboot.command: %s, boot.status: %s, boot.recovery: %s, boot.stage: %s\n",
     boot.command, boot.status, boot.recovery, boot.stage);
 
     // if (!wait_for_device(misc_blk_device, err)) {
@@ -155,9 +156,9 @@ int write_recovery_to_bcb() {
     // Update the boot command field if it's empty, and preserve
     // the other arguments in the bootloader message.
     if (!CommandIsPresent(&boot)) {
-        strlcpy(boot.command, "boot-recovery", sizeof(boot.command));
+        strlcpy(boot.command, "boot-recovery --update_package=/cache/base_aaos-ota-eng.jade.zip", sizeof(boot.command));
         if (write_misc_partition(&boot, sizeof(boot), misc_blk_device, BOOTLOADER_MESSAGE_OFFSET_IN_MISC)==-1) {
-            perror("Failed to set bootloader message\n");
+            ALOGE("Failed to set bootloader message\n");
             return -1;
         }
     }
@@ -166,7 +167,7 @@ int write_recovery_to_bcb() {
 
 int handle_start_ota(PCI_TTY_Config *config) {
     if (send_message(config->fd_write, "need_to_ota\n")) {
-        perror("send_message failed!\n");
+        ALOGE("send_message failed!\n");
         return -1;
     }
     return 0;
@@ -180,9 +181,9 @@ int handle_ota_package_not_ready(PCI_TTY_Config *config){
     }
 
     if (remove(OTA_PACKAGE) == 0) {
-        printf("File %s deleted successfully.\n", OTA_PACKAGE);
+        ALOGI("File %s deleted successfully.\n", OTA_PACKAGE);
     } else {
-        perror("remove");
+        ALOGE("remove");
         return -1;
     }
 
@@ -196,18 +197,18 @@ int handle_ota_package_ready(PCI_TTY_Config *config) {
 
     //notify SOS
     if (send_message(config->fd_write, "vm_shutdown\n")) {
-        perror("send_message failed!\n");
+        ALOGE("send_message failed!\n");
         return EXIT_FAILURE;
     }
 
     // shutdown
-    // int result = system("reboot -p");
-    // if (result == -1) {
-    //     perror("system");
-    //     return 1;
-    // } else {
-    //     printf("Script executed with exit status: %d\n", WEXITSTATUS(result));
-    // }
+    int result = system("reboot -p");
+    if (result == -1) {
+        ALOGE("system");
+        return 1;
+    } else {
+        ALOGI("Script executed with exit status: %d\n", WEXITSTATUS(result));
+    }
     return 0;
 }
 
@@ -217,8 +218,8 @@ int handle_start_install(PCI_TTY_Config *config) {
 
 
     // installed well
-    if (send_message(config->fd_write, "installed_well\n")) {
-        perror("send_message failed!\n");
+    if (send_message(config->fd_write, "successful\n")) {
+        ALOGE("send_message failed!\n");
         return -1;
     }
 
@@ -247,21 +248,21 @@ int handle_responses(char *buf) {
 int build_connection(PCI_TTY_Config *config) {
     // open both read and write tty devices
     if (find_tty_by_pci_addr(config) == 0) {
-        printf("\n<config>\npci_read:%s  tty_read:%s \npci_write:%s  tty_write:%s\n",
+        ALOGD("\n<config>\npci_read:%s  tty_read:%s \npci_write:%s  tty_write:%s\n",
         config->pci_read, config->tty_read, config->pci_write, config->tty_write);
 
         config->fd_read = open(config->tty_read, O_RDWR | O_NOCTTY);
         if (config->fd_read == -1) {
-            perror("open fd_read");
+            ALOGE("open fd_read");
             return -1;
         }
         config->fd_write = open(config->tty_write, O_RDWR | O_NOCTTY);
         if (config->fd_write == -1) {
-            perror("open fd_write");
+            ALOGE("open fd_write");
             return -1;
         }
     } else {
-        perror("TTY devices not found for the given PCI addr.\n");
+        ALOGE("TTY devices not found for the given PCI addr.\n");
         return -1;
     }
 
@@ -278,10 +279,10 @@ int main(int argc, char* argv[]) {
     enum Response response;
 
     if (argc != 1 && argc != 3) {
-        printf("Usage:       %s\n", argv[0]);
-        printf("             %s <pci_read> <pci_write>\n", argv[0]);
-        printf("For example: %s\n", argv[0]);
-        printf("             %s 0000:00:0f.0 0000:00:13.0\n", argv[0]);
+        ALOGI("Usage:       %s\n", argv[0]);
+        ALOGI("             %s <pci_read> <pci_write>\n", argv[0]);
+        ALOGI("For example: %s\n", argv[0]);
+        ALOGI("             %s 0000:00:0f.0 0000:00:13.0\n", argv[0]);
         return EXIT_FAILURE;
     }
 
@@ -289,7 +290,7 @@ int main(int argc, char* argv[]) {
     config.pci_write = argc==3? argv[2]:"0000:00:13.0";
 
     if (build_connection(&config)!=0) {
-        perror("Failed to build connection.\n");
+        ALOGE("Failed to build connection.\n");
         return EXIT_FAILURE;
     }
 
@@ -299,10 +300,9 @@ int main(int argc, char* argv[]) {
         if (receive_message(config.fd_read, buf, sizeof(buf) - 1)==0) {
             //handle
             response = handle_responses(buf);
-            printf("Received: code=%d, buf=%s\n", response, buf);
+            ALOGI("Received: code=%d, buf=%s\n", response, buf);
             switch (response) {
                 case START_OTA:
-                // init message
                     handle_start_ota(&config);
                     break;
                 case PACKAGE_READY:
