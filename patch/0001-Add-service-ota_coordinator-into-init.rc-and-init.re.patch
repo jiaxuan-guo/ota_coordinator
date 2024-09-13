@@ -1,0 +1,58 @@
+From 0342c15c48311ab7a3b9ccb8fb383a97fb4af6c3 Mon Sep 17 00:00:00 2001
+From: "Guo, Jade" <jade.guo@intel.com>
+Date: Fri, 13 Sep 2024 21:07:34 +0800
+Subject: [PATCH] Add service ota_coordinator into init.rc and init.recovery.rc
+ under boot-arch
+
+Signed-off-by: Guo, Jade <jade.guo@intel.com>
+---
+ groups/boot-arch/project-celadon/init.rc          | 9 +++++++++
+ groups/boot-arch/project-celadon/init.recovery.rc | 7 +++++++
+ 2 files changed, 16 insertions(+)
+
+diff --git a/groups/boot-arch/project-celadon/init.rc b/groups/boot-arch/project-celadon/init.rc
+index e5fa33a..7509624 100644
+--- a/groups/boot-arch/project-celadon/init.rc
++++ b/groups/boot-arch/project-celadon/init.rc
+@@ -17,6 +17,12 @@ service watchdogd /system/bin/watchdogd{{#watchdog_parameters}} {{{watchdog_para
+     oneshot
+     seclabel u:r:watchdogd:s0
+ 
++service ota_coordinator /system/bin/ota_coordinator
++    user root
++    class core
++    oneshot
++    seclabel u:r:shell:s0
++
+ on charger
+     start watchdogd
+ {{#metadata_encryption}}
+@@ -57,3 +63,6 @@ on fs
+ on verity-logging
+     exec u:r:slideshow:s0 -- /sbin/slideshow -t 30000 -p warning/verity_red_1 warning/verity_red_2
+ {{/verity_warning}}
++
++on boot
++    start ota_coordinator
+diff --git a/groups/boot-arch/project-celadon/init.recovery.rc b/groups/boot-arch/project-celadon/init.recovery.rc
+index 4823ed2..8be4dcf 100644
+--- a/groups/boot-arch/project-celadon/init.recovery.rc
++++ b/groups/boot-arch/project-celadon/init.recovery.rc
+@@ -5,7 +5,14 @@ service watchdogd /system/bin/watchdogd{{#watchdog_parameters}} {{{watchdog_para
+     oneshot
+     seclabel u:r:watchdogd:s0
+ 
++service ota_coordinator /system/bin/ota_coordinator
++    user root
++    class core
++    oneshot
++    seclabel u:r:shell:s0
++
+ on boot
+     start watchdogd
++    start ota_coordinator
+     write /proc/sys/kernel/hung_task_timeout_secs{{#hung_task_timeout_secs}} {{{hung_task_timeout_secs}}}{{/hung_task_timeout_secs}}
+ {{/use_cic}}
+-- 
+2.34.1
+
