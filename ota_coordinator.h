@@ -17,10 +17,14 @@ typedef struct {
     int fd_write;
 } PCI_TTY_Config;
 
+// If adding new responses here, please also update
+// handle_responses() as well as handle logic in main()
 enum Response{
     START_OTA=0,
     PACKAGE_READY,
     PACKAGE_NOT_READY,
+    START_INSTALL,
+    ROLLBACK,
     UNDEFIINED
 };
 
@@ -71,3 +75,4 @@ int handle_responses(char *buf);
 int handle_start_ota(PCI_TTY_Config *config);
 int handle_ota_package_ready(PCI_TTY_Config *config);
 int handle_ota_package_not_ready(PCI_TTY_Config *config);
+int handle_start_install(PCI_TTY_Config *config);

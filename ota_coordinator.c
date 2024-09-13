@@ -109,7 +109,7 @@ void config_uart(int fd, int isICANON) {
 }
 
 int isprint(int c) {
- 	return (unsigned)c-0x20 < 0x5f;
+	return (unsigned)c-0x20 < 0x5f;
 }
 
 int CommandIsPresent(bootloader_message* boot) {
@@ -146,7 +146,7 @@ int write_recovery_to_bcb() {
         return -1;
     }
     printf("<get_bootloader_message>\nboot.command: %s, boot.status: %s, boot.recovery: %s, boot.stage: %s\n",
-     boot.command, boot.status, boot.recovery, boot.stage);
+    boot.command, boot.status, boot.recovery, boot.stage);
 
     // if (!wait_for_device(misc_blk_device, err)) {
     //     return false;
@@ -211,6 +211,25 @@ int handle_ota_package_ready(PCI_TTY_Config *config) {
     return 0;
 }
 
+// install the package and send the notification to SOS
+int handle_start_install(PCI_TTY_Config *config) {
+    // todo: start to install the package
+
+
+    // installed well
+    if (send_message(config->fd_write, "installed_well\n")) {
+        perror("send_message failed!\n");
+        return -1;
+    }
+
+    //todo: installed failed, ignore for now
+    return 0;
+}
+
+int handle_rollback() {
+    return 0;
+}
+
 int handle_responses(char *buf) {
     if (strncmp(buf, "start_ota", sizeof("start_ota")-1)==0) {
         return START_OTA;
@@ -218,6 +237,8 @@ int handle_responses(char *buf) {
         return PACKAGE_READY;
     } else if (strncmp(buf, "package_not_ready", sizeof("package_not_ready")-1) == 0) {
         return PACKAGE_NOT_READY;
+    } else if (strncmp(buf, "start_install", sizeof("start_install")-1) == 0) {
+        return START_INSTALL;
     } else {
         return UNDEFIINED;
     }
@@ -245,8 +266,8 @@ int build_connection(PCI_TTY_Config *config) {
     }
 
     // set uart configs
-    config_uart(config.fd_write, 1);
-    config_uart(config.fd_read, 0);
+    config_uart(config->fd_write, 1);
+    config_uart(config->fd_read, 0);
 
     return 0;
 }
@@ -256,16 +277,19 @@ int main(int argc, char* argv[]) {
     PCI_TTY_Config config;
     enum Response response;
 
-    if (argc != 3) {
-        printf("<Usage>: %s <pci_read> <pci_write>\n", argv[0]);
-        printf("For example: ./ota_coordinator 0000:00:0f.0 0000:00:13.0\n");
+    if (argc != 1 && argc != 3) {
+        printf("Usage:       %s\n", argv[0]);
+        printf("             %s <pci_read> <pci_write>\n", argv[0]);
+        printf("For example: %s\n", argv[0]);
+        printf("             %s 0000:00:0f.0 0000:00:13.0\n", argv[0]);
         return EXIT_FAILURE;
     }
 
-    config.pci_read = argv[1];
-    config.pci_write = argv[2];
+    config.pci_read = argc==3? argv[1]:"0000:00:0f.0";
+    config.pci_write = argc==3? argv[2]:"0000:00:13.0";
+
     if (build_connection(&config)!=0) {
-        perror("Failed to build connection.\n")
+        perror("Failed to build connection.\n");
         return EXIT_FAILURE;
     }
 
@@ -287,6 +311,11 @@ int main(int argc, char* argv[]) {
                 case PACKAGE_NOT_READY:
                     handle_ota_package_not_ready(&config);
                     break;
+                case START_INSTALL:
+                    handle_start_install(&config);
+                    break;
+                case ROLLBACK:
+                    handle_rollback();
                 case UNDEFIINED:
                     break;
             }
