@@ -1,0 +1,25 @@
+From ad84d32f4ff54a252d57d9ef64801df303aa806e Mon Sep 17 00:00:00 2001
+From: "Guo, Jade" <jade.guo@intel.com>
+Date: Tue, 24 Sep 2024 17:12:31 +0800
+Subject: [PATCH] Add ota_coordinator into product.mk
+
+Signed-off-by: Guo, Jade <jade.guo@intel.com>
+---
+ groups/boot-arch/project-celadon/product.mk | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/groups/boot-arch/project-celadon/product.mk b/groups/boot-arch/project-celadon/product.mk
+index f4e2f94..98eb9cb 100644
+--- a/groups/boot-arch/project-celadon/product.mk
++++ b/groups/boot-arch/project-celadon/product.mk
+@@ -1,3 +1,7 @@
++# ota_coordinator library and service
++PRODUCT_PACKAGES += \
++	ota_coordinator
++
+ {{#fw_sbl}}
+ TARGET_UEFI_ARCH := i386
+ {{/fw_sbl}}
+-- 
+2.34.1
+
