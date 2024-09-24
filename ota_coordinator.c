@@ -4,6 +4,28 @@
 #define BOOTLOADER_MESSAGE_OFFSET_IN_MISC 0
 #define OTA_PACKAGE "/data/ota/xxx.zip"
 
+int is_recovery;
+void log_wrapper(LogLevel level, const char *log) {
+    if (is_recovery) {
+        printf("%s", log);
+    } else {
+        switch (level) {
+            case LOG_LEVEL_DEBUG:
+                ALOGD("%s", log);
+                break;
+            case LOG_LEVEL_INFO:
+                ALOGI("%s", log);
+                break;
+            case LOG_LEVEL_WARNING:
+                ALOGW("%s", log);
+                break;
+            case LOG_LEVEL_ERROR:
+                ALOGE("%s", log);
+                break;
+        }
+    }
+}
+
 int isprint(int c) {
 	return (unsigned)c-0x20 < 0x5f;
 }
@@ -30,19 +52,22 @@ int get_bootloader_message(bootloader_message *boot, char* misc_blk_device) {
 int write_recovery_to_bcb() {
     char misc_blk_device[256];
     bootloader_message boot;
+    char log[256];
 
     if (get_misc_blk_device(misc_blk_device)==-1) {
-        ALOGE("Failed to get_misc_blk_device\n");
+        log_wrapper(LOG_LEVEL_ERROR, "Failed to get_misc_blk_device\n");
         return -1;
     }
-    ALOGI("misc_blk_device: %s\n", misc_blk_device);
+    snprintf(log, sizeof(log), "misc_blk_device: %s\n", misc_blk_device);
+    log_wrapper(LOG_LEVEL_INFO, log);
 
     if (get_bootloader_message(&boot, misc_blk_device)==-1) {
-        ALOGE("Failed to get_misc_blk_device\n");
+        log_wrapper(LOG_LEVEL_ERROR, "Failed to get_misc_blk_device\n");
         return -1;
     }
-    ALOGI("<get_bootloader_message>\nboot.command: %s, boot.status: %s, boot.recovery: %s, boot.stage: %s\n\n",
+    snprintf(log, sizeof(log), "<get_bootloader_message>\nboot.command: %s, boot.status: %s, boot.recovery: %s, boot.stage: %s\n\n",
     boot.command, boot.status, boot.recovery, boot.stage);
+    log_wrapper(LOG_LEVEL_INFO, log);
 
     // if (!wait_for_device(misc_blk_device, err)) {
     //     return false;
@@ -53,20 +78,21 @@ int write_recovery_to_bcb() {
     if (!is_boot_cmd_empty(&boot)) {
         strlcpy(boot.command, "boot-recovery", sizeof(boot.command));
         if (write_misc_partition(&boot, sizeof(boot), misc_blk_device, BOOTLOADER_MESSAGE_OFFSET_IN_MISC)==-1) {
-            ALOGE("Failed to set bootloader message\n");
+            log_wrapper(LOG_LEVEL_ERROR, "Failed to set bootloader message\n");
             return -1;
         }
-        ALOGI("<write_misc_partition>\nboot.command: %s, boot.status: %s, boot.recovery: %s, boot.stage: %s\n\n",
+        snprintf(log, sizeof(log), "<get_bootloader_message>\nboot.command: %s, boot.status: %s, boot.recovery: %s, boot.stage: %s\n\n",
         boot.command, boot.status, boot.recovery, boot.stage);
+        log_wrapper(LOG_LEVEL_INFO, log);
     } else {
-        ALOGI("boot.command is not empty, don't write recovery into it.\n");
+        log_wrapper(LOG_LEVEL_INFO, "boot.command is not empty, don't write recovery into it.\n");
     }
     return 0;
 }
 
 int handle_start_ota(PCI_TTY_Config *config) {
     if (send_message(config->fd_write, "need_to_ota\n")) {
-        ALOGE("send_message failed!\n");
+        log_wrapper(LOG_LEVEL_ERROR, "send_message failed!\n");
         return -1;
     }
     return 0;
@@ -80,9 +106,9 @@ int handle_ota_package_not_ready(PCI_TTY_Config *config){
     }
 
     if (remove(OTA_PACKAGE) == 0) {
-        ALOGI("File %s deleted successfully.\n", OTA_PACKAGE);
+        log_wrapper(LOG_LEVEL_INFO, "OTA_PACKAGE deleted successfully.\n");
     } else {
-        ALOGE("remove");
+        log_wrapper(LOG_LEVEL_ERROR, "remove");
         return -1;
     }
 
@@ -91,22 +117,24 @@ int handle_ota_package_not_ready(PCI_TTY_Config *config){
 
 //All VMs set the next boot target as recovery, notify SOS, shutdown
 int handle_ota_package_ready(PCI_TTY_Config *config) {
+    char log[256];
     //write recovery into BCB(bootloader control block)
     write_recovery_to_bcb();
 
     //notify SOS
     if (send_message(config->fd_write, "vm_shutdown\n")) {
-        ALOGE("send_message failed!\n");
+        log_wrapper(LOG_LEVEL_ERROR, "send_message failed!\n");
         return EXIT_FAILURE;
     }
 
     // shutdown
     int result = system("reboot -p");
     if (result == -1) {
-        ALOGE("system");
+        log_wrapper(LOG_LEVEL_ERROR, "system");
         return 1;
     } else {
-        ALOGI("Script executed with exit status: %d\n", WEXITSTATUS(result));
+        snprintf(log, sizeof(log), "Script executed with exit status: %d\n", WEXITSTATUS(result));
+        log_wrapper(LOG_LEVEL_INFO, log);
     }
     return 0;
 }
@@ -118,7 +146,7 @@ int handle_start_install(PCI_TTY_Config *config) {
 
     // installed well
     if (send_message(config->fd_write, "successful\n")) {
-        ALOGE("send_message failed!\n");
+        log_wrapper(LOG_LEVEL_ERROR, "send_message failed!\n");
         return -1;
     }
 
@@ -148,12 +176,14 @@ int main(int argc, char* argv[]) {
     char buf[256];
     PCI_TTY_Config config;
     enum Response response;
+    char log[256];
+    is_recovery = access("/system/bin/recovery", F_OK) == 0;
 
     if (argc != 1 && argc != 3) {
-        ALOGI("Usage:       %s\n", argv[0]);
-        ALOGI("             %s <pci_read> <pci_write>\n", argv[0]);
-        ALOGI("For example: %s\n", argv[0]);
-        ALOGI("             %s 0000:00:0f.0 0000:00:13.0\n", argv[0]);
+        log_wrapper(LOG_LEVEL_INFO, "Usage:       ./ota_coordinator\n");
+        log_wrapper(LOG_LEVEL_INFO, "             ./ota_coordinator <pci_read> <pci_write>\n");
+        log_wrapper(LOG_LEVEL_INFO, "For example:./ota_coordinator\n");
+        log_wrapper(LOG_LEVEL_INFO, "             ./ota_coordinator 0000:00:0f.0 0000:00:13.0\n");
         return EXIT_FAILURE;
     }
 
@@ -161,9 +191,11 @@ int main(int argc, char* argv[]) {
     config.pci_write = argc==3? argv[2]:"0000:00:13.0";
 
     if (build_connection(&config)!=0) {
-        ALOGE("Failed to build connection.\n");
+        log_wrapper(LOG_LEVEL_ERROR, "Failed to build connection.\n");
         return EXIT_FAILURE;
     }
+
+    printf("is_recovery is %d\n",is_recovery);
 
     while(1) {
         memset(buf, 0, sizeof(buf));
@@ -171,7 +203,8 @@ int main(int argc, char* argv[]) {
         if (receive_message(config.fd_read, buf, sizeof(buf) - 1)==0) {
             //handle
             response = handle_responses(buf);
-            ALOGI("Received: code=%d, buf=%s\n", response, buf);
+            snprintf(log, sizeof(log), "Received: code=%d, buf=%s\n", response, buf);
+            log_wrapper(LOG_LEVEL_INFO, log);
             switch (response) {
                 case START_OTA:
                     handle_start_ota(&config);

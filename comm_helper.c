@@ -30,7 +30,7 @@ int find_tty_by_pci_addr(PCI_TTY_Config *config) {
     // Open the PCI devices directory
     dir = opendir(SYSFS_PCI_DEVICES);
     if (!dir) {
-        ALOGE("opendir");
+        log_wrapper(LOG_LEVEL_ERROR, "opendir");
         return ret;
     }
 
@@ -52,12 +52,12 @@ int find_tty_by_pci_addr(PCI_TTY_Config *config) {
 int set_blocking(int fd) {
     int flags = fcntl(fd, F_GETFL, 0);
     if (flags == -1) {
-        ALOGE("fcntl");
+        log_wrapper(LOG_LEVEL_ERROR, "fcntl");
         return -1;
     }
     flags &= ~O_NONBLOCK;
     if (fcntl(fd, F_SETFL, flags) == -1) {
-        ALOGE("fcntl");
+        log_wrapper(LOG_LEVEL_ERROR, "fcntl");
         return -1;
     }
     return 0;
@@ -94,16 +94,16 @@ int build_connection(PCI_TTY_Config *config) {
 
         config->fd_read = open(config->tty_read, O_RDWR | O_NOCTTY);
         if (config->fd_read == -1) {
-            ALOGE("open fd_read");
+            log_wrapper(LOG_LEVEL_ERROR, "open fd_read");
             return -1;
         }
         config->fd_write = open(config->tty_write, O_RDWR | O_NOCTTY);
         if (config->fd_write == -1) {
-            ALOGE("open fd_write");
+            log_wrapper(LOG_LEVEL_ERROR, "open fd_write");
             return -1;
         }
     } else {
-        ALOGE("TTY devices not found for the given PCI addr.\n");
+        log_wrapper(LOG_LEVEL_ERROR, "TTY devices not found for the given PCI addr.\n");
         return -1;
     }
 
@@ -115,19 +115,21 @@ int build_connection(PCI_TTY_Config *config) {
 }
 
 int send_message(int fd, const char *message) {
+    char log[256];
     int n = write(fd, message, strlen(message));
     if (n < 0) {
-        ALOGE("Write failed - ");
+        log_wrapper(LOG_LEVEL_ERROR, "Write failed - ");
         return -1;
     }
     tcdrain(fd);
-    ALOGI("Sent: %s\n", message);
+    snprintf(log, sizeof(log), "Sent: %s\n", message);
+    log_wrapper(LOG_LEVEL_INFO, log);
     return 0;
 }
 
 int receive_message(int fd, char *buf, size_t size) {
     if (read(fd, buf, size)==-1) {
-        ALOGE("read error");
+        log_wrapper(LOG_LEVEL_ERROR, "read error");
         return -1;
     }
     return 0;

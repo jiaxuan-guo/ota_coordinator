@@ -1,6 +1,7 @@
 #include "ota_coordinator.h"
-#define FSTAB_PATH "/vendor/etc/fstab.base_aaos" //todo: different platform?
-
+// #define FSTAB_PATH "/vendor/etc/fstab.base_aaos" //todo: different platform?
+#define FSTAB_PATH "/vendor/etc/fstab.aaos_iasw" //todo: different platform?
+#define MISC_PART "/misc"
 
 int read_misc_partition(void* buf, size_t size, char *misc_blk_device, size_t offset) {
     FILE *file;
@@ -88,7 +89,7 @@ int get_misc_blk_device(char *misc_blk_device) {
             continue;
         }
 
-        if (strncmp(entry.mount_point, "/misc", sizeof("/misc")) == 0) {
+        if (strncmp(entry.mount_point, MISC_PART, sizeof(MISC_PART)) == 0) {
             strlcpy(misc_blk_device, entry.device, sizeof(entry.device));
             return 0;
         }
