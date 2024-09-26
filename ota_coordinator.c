@@ -3,6 +3,9 @@
 
 #define BOOTLOADER_MESSAGE_OFFSET_IN_MISC 0
 #define OTA_PACKAGE "/data/ota/xxx.zip"
+#define RECOVERY_CMD "boot-recovery"
+// #define RECOVERY_PATH "recovery\n--wipe_data"
+#define RECOVERY_PATH "recovery\n--update_package=/udiska/aaos_iasw-ota-eng.jade.zip"
 
 int is_recovery;
 void log_wrapper(LogLevel level, const char *log) {
@@ -65,7 +68,8 @@ int write_recovery_to_bcb() {
         log_wrapper(LOG_LEVEL_ERROR, "Failed to get_misc_blk_device\n");
         return -1;
     }
-    snprintf(log, sizeof(log), "<get_bootloader_message>\nboot.command: %s, boot.status: %s, boot.recovery: %s, boot.stage: %s\n\n",
+    snprintf(log, sizeof(log), "<get before bebootloader message>\nboot.command: %s, boot.status: %s,\
+     boot.recovery: %s, boot.stage: %s\n\n",
     boot.command, boot.status, boot.recovery, boot.stage);
     log_wrapper(LOG_LEVEL_INFO, log);
 
@@ -76,12 +80,13 @@ int write_recovery_to_bcb() {
     // Update the boot command field if it's empty, and preserve
     // the other arguments in the bootloader message.
     if (!is_boot_cmd_empty(&boot)) {
-        strlcpy(boot.command, "boot-recovery", sizeof(boot.command));
+        strlcpy(boot.command, RECOVERY_CMD, sizeof(RECOVERY_CMD));
+        strlcpy(boot.recovery, RECOVERY_PATH, sizeof(RECOVERY_PATH));
         if (write_misc_partition(&boot, sizeof(boot), misc_blk_device, BOOTLOADER_MESSAGE_OFFSET_IN_MISC)==-1) {
             log_wrapper(LOG_LEVEL_ERROR, "Failed to set bootloader message\n");
             return -1;
         }
-        snprintf(log, sizeof(log), "<get_bootloader_message>\nboot.command: %s, boot.status: %s, boot.recovery: %s, boot.stage: %s\n\n",
+        snprintf(log, sizeof(log), "<get after bootloader message>\nboot.command: %s, boot.status: %s, boot.recovery: %s, boot.stage: %s\n\n",
         boot.command, boot.status, boot.recovery, boot.stage);
         log_wrapper(LOG_LEVEL_INFO, log);
     } else {
@@ -194,8 +199,6 @@ int main(int argc, char* argv[]) {
         log_wrapper(LOG_LEVEL_ERROR, "Failed to build connection.\n");
         return EXIT_FAILURE;
     }
-
-    printf("is_recovery is %d\n",is_recovery);
 
     while(1) {
         memset(buf, 0, sizeof(buf));
