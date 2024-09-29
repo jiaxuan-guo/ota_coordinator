@@ -2,6 +2,7 @@
 #include "ota_coordinator.h"
 
 #define BOOTLOADER_MESSAGE_OFFSET_IN_MISC 0
+#define ANDROID_RB_PROPERTY "sys.powerctl"
 #define OTA_PACKAGE "/data/ota/xxx.zip"
 #define RECOVERY_CMD "boot-recovery"
 // #define RECOVERY_PATH "recovery\n--wipe_data"
@@ -86,7 +87,8 @@ int write_recovery_to_bcb() {
             log_wrapper(LOG_LEVEL_ERROR, "Failed to set bootloader message\n");
             return -1;
         }
-        snprintf(log, sizeof(log), "<get after bootloader message>\nboot.command: %s, boot.status: %s, boot.recovery: %s, boot.stage: %s\n\n",
+        snprintf(log, sizeof(log), "<get after bootloader message>\nboot.command: %s, boot.status: %s,\
+         boot.recovery: %s, boot.stage: %s\n\n",
         boot.command, boot.status, boot.recovery, boot.stage);
         log_wrapper(LOG_LEVEL_INFO, log);
     } else {
@@ -123,6 +125,8 @@ int handle_ota_package_not_ready(PCI_TTY_Config *config){
 //All VMs set the next boot target as recovery, notify SOS, shutdown
 int handle_ota_package_ready(PCI_TTY_Config *config) {
     char log[256];
+    int ret;
+
     //write recovery into BCB(bootloader control block)
     write_recovery_to_bcb();
 
@@ -133,12 +137,12 @@ int handle_ota_package_ready(PCI_TTY_Config *config) {
     }
 
     // shutdown
-    int result = system("reboot -p");
-    if (result == -1) {
-        log_wrapper(LOG_LEVEL_ERROR, "system");
+    ret = property_set(ANDROID_RB_PROPERTY, "shutdown");
+    if (ret < 0) {
+        log_wrapper(LOG_LEVEL_ERROR,"Shutdown failed\n");
         return 1;
     } else {
-        snprintf(log, sizeof(log), "Script executed with exit status: %d\n", WEXITSTATUS(result));
+        snprintf(log, sizeof(log), "Script executed with exit status: %d\n", WEXITSTATUS(ret));
         log_wrapper(LOG_LEVEL_INFO, log);
     }
     return 0;

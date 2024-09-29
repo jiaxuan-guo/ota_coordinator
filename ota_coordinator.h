@@ -9,6 +9,8 @@
 #include <signal.h>
 #include <poll.h>
 #include <android/log.h>
+#include <cutils/properties.h>
+#include <cutils/android_reboot.h>
 
 #define LOG_TAG "ota_coordinator"
 #define ALOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__);
