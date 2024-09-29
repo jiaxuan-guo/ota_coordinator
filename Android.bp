@@ -1,5 +1,4 @@
 
-
 cc_binary {
     name: "ota_coordinator",
     cflags: [
@@ -12,6 +11,28 @@ cc_binary {
         "device_helper.c",
         "comm_helper.c",
     ],
-    shared_libs: ["liblog"],
-    recovery_available: true,
+    shared_libs: [
+        "liblog",
+        "libcutils",
+    ],
+}
+
+
+cc_binary {
+    name: "ota_coordinator_recovery",
+    cflags: [
+        "-Wall",
+        "-Werror",
+    ],
+
+    srcs: [
+        "ota_coordinator.c",
+        "device_helper.c",
+        "comm_helper.c",
+    ],
+    shared_libs: [
+        "liblog",
+        "libcutils",
+    ],
+    recovery: true,
 }
