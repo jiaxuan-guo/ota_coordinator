@@ -1,0 +1,33 @@
+From 89316d59e12323216833363be4e7eaff8b07fafd Mon Sep 17 00:00:00 2001
+From: "Guo, Jade" <jade.guo@intel.com>
+Date: Wed, 9 Oct 2024 21:31:33 +0800
+Subject: [PATCH] Start ota coordinator on boot time in recovery mode
+
+Signed-off-by: Guo, Jade <jade.guo@intel.com>
+---
+ etc/init.rc | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/etc/init.rc b/etc/init.rc
+index c7ff2b2b..a87be99f 100644
+--- a/etc/init.rc
++++ b/etc/init.rc
+@@ -49,7 +49,15 @@ on init
+     # Start essential services
+     start servicemanager
+ 
++service ota_coordinator_recovery /system/bin/ota_coordinator_recovery
++    user root
++    class core
++    oneshot
++    seclabel u:r:shell:s0
++
+ on boot
++    start ota_coordinator_recovery
++
+     ifup lo
+     hostname localhost
+     domainname localdomain
+-- 
+2.34.1
+
