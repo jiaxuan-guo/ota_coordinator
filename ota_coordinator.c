@@ -7,9 +7,8 @@
 // #define RECOVERY_PATH "recovery\n--wipe_data"
 #define RECOVERY_PATH "recovery\n--update_package=/udiska/aaos_iasw-ota-eng.jade.zip"
 
-int is_recovery;
 void log_wrapper(LogLevel level, const char *log) {
-    if (is_recovery) {
+    if (IS_RECOVERY) {
         printf("%s", log);
     } else {
         switch (level) {
@@ -188,7 +187,6 @@ int main(int argc, char* argv[]) {
     PCI_TTY_Config config;
     enum Response response;
     char log[256];
-    is_recovery = access("/system/bin/recovery", F_OK) == 0;
 
     if (argc != 1 && argc != 3) {
         log_wrapper(LOG_LEVEL_INFO, "Usage:       ./ota_coordinator\n");

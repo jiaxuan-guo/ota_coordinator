@@ -13,6 +13,7 @@
 #include <cutils/android_reboot.h>
 #include "bootloader_message.h"
 
+#define IS_RECOVERY (access("/system/bin/recovery", F_OK) == 0)
 #define LOG_TAG "ota_coordinator"
 #define ALOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__);
 #define ALOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__);

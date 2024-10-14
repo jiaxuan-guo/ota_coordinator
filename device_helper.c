@@ -1,6 +1,6 @@
 #include "ota_coordinator.h"
-// #define FSTAB_PATH "/vendor/etc/fstab.base_aaos" //todo: different platform?
 #define FSTAB_PATH "/vendor/etc/fstab.aaos_iasw" //todo: different platform?
+#define FSTAB_PATH_RECOVERY "/etc/recovery.fstab"
 #define MISC_PART "/misc"
 #define MISC_LABEL "misc"
 
@@ -96,9 +96,15 @@ int write_misc_partition(const void* buf, size_t size, char *misc_blk_device, si
 }
 
 int get_misc_blk_device(char *misc_blk_device) {
-    FILE *file = fopen(FSTAB_PATH, "r");
+    FILE *file;
     char line[256];
     FstabEntry entry;
+
+    if (IS_RECOVERY) {
+        file = fopen(FSTAB_PATH_RECOVERY, "r");
+    } else {
+        file = fopen(FSTAB_PATH, "r");
+    }
 
     if (file == NULL) {
         perror("Failed to open fstab file");
