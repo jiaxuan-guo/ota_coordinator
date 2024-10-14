@@ -1,0 +1,147 @@
+From 17d7c46c840aa876853ff33313d7c0ac8b22b1c4 Mon Sep 17 00:00:00 2001
+From: "Guo, Jade" <jade.guo@intel.com>
+Date: Mon, 14 Oct 2024 23:27:02 +0800
+Subject: [PATCH] Add a parameter --virtiofs
+
+If virtiofs is set, mount virtiofs before OTA update
+
+Signed-off-by: Guo, Jade <jade.guo@intel.com>
+---
+ etc/init.rc              |  1 +
+ recovery.cpp             | 44 ++++++++++++++++++++++++++++++++++++++++
+ recovery_utils/roots.cpp |  2 +-
+ 3 files changed, 46 insertions(+), 1 deletion(-)
+
+diff --git a/etc/init.rc b/etc/init.rc
+index a87be99f..f234fe52 100644
+--- a/etc/init.rc
++++ b/etc/init.rc
+@@ -57,6 +57,7 @@ service ota_coordinator_recovery /system/bin/ota_coordinator_recovery
+ 
+ on boot
+     start ota_coordinator_recovery
++    mkdir /mota
+ 
+     ifup lo
+     hostname localhost
+diff --git a/recovery.cpp b/recovery.cpp
+index d2765151..02ebe0cc 100644
+--- a/recovery.cpp
++++ b/recovery.cpp
+@@ -26,7 +26,10 @@
+ #include <stdlib.h>
+ #include <string.h>
+ #include <sys/types.h>
++#include <sys/mount.h>
+ #include <unistd.h>
++#include <iostream>
++#include <fstream>
+ 
+ #include <functional>
+ #include <iterator>
+@@ -88,6 +91,7 @@ static bool save_current_log = false;
+  *   --set_encrypted_filesystem=on|off - enables / diasables encrypted fs
+  *   --just_exit - do nothing; exit and reboot
+  *   --dont_reboot - stop the machine from rebooting if install_success, this is for OTA coordinator
++ *   --virtiofs mount virtiofs before get the package, this is for OTA coordinator
+  *
+  * After completing, we remove /cache/recovery/command and reboot.
+  * Arguments may also be supplied in the bootloader control block (BCB).
+@@ -604,6 +608,32 @@ static void log_failure_code(ErrorCode code, const std::string& update_package)
+   LOG(INFO) << log_content;
+ }
+ 
++int write_ota_status(InstallResult data) {
++    const std::string filename = "/data/ota_status";
++
++    std::ofstream file(filename);
++    if (!file.is_open()) {
++        std::cerr << "Failed to open file: " << filename << std::endl;
++        return 1;
++    }
++
++    file << "ota_status=" << data;
++    if (file.fail()) {
++        std::cerr << "Failed to write to file: " << filename << std::endl;
++        file.close();
++        return 1;
++    }
++
++    file.close();
++    if (file.fail()) {
++        std::cerr << "Failed to close file: " << filename << std::endl;
++        return 1;
++    }
++
++    std::cout << "Data written to " << filename << " successfully." << std::endl;
++    return 0;
++}
++
+ Device::BuiltinAction start_recovery(Device* device, const std::vector<std::string>& args) {
+   static constexpr struct option OPTIONS[] = {
+     { "fastboot", no_argument, nullptr, 0 },
+@@ -625,6 +655,7 @@ Device::BuiltinAction start_recovery(Device* device, const std::vector<std::stri
+     { "wipe_data", no_argument, nullptr, 0 },
+     { "wipe_package_size", required_argument, nullptr, 0 },
+     { "dont_reboot", no_argument, nullptr, 0 },
++    { "virtiofs", no_argument, nullptr, 0 },
+     { nullptr, 0, nullptr, 0 },
+   };
+ 
+@@ -643,6 +674,7 @@ Device::BuiltinAction start_recovery(Device* device, const std::vector<std::stri
+   int retry_count = 0;
+   bool security_update = false;
+   bool dont_reboot = false;
++  bool virtiofs = false;
+   std::string locale;
+ 
+   auto args_to_parse = StringVectorToNullTerminatedArray(args);
+@@ -694,6 +726,8 @@ Device::BuiltinAction start_recovery(Device* device, const std::vector<std::stri
+           android::base::ParseUint(optarg, &wipe_package_size);
+         } else if (option == "dont_reboot") {
+           dont_reboot = true;
++        } else if (option == "virtiofs") {
++          virtiofs = true;
+         }
+         break;
+       }
+@@ -746,6 +780,15 @@ Device::BuiltinAction start_recovery(Device* device, const std::vector<std::stri
+     // to log the update attempt since update_package is non-NULL.
+     save_current_log = true;
+ 
++    // mount virtiofs if necessary
++    if (virtiofs) {
++      if (mount("myfs", "/mota", "virtiofs", 0, NULL) == -1) {
++          ui->Print("Error mounting myfs on /mota\n");
++      } else {
++        ui->Print("Successfully mounted myfs on /mota\n");
++      }
++    }
++
+     if (int required_battery_level; retry_count == 0 && !IsBatteryOk(&required_battery_level)) {
+       ui->Print("battery capacity is not enough for installing package: %d%% needed\n",
+                 required_battery_level);
+@@ -772,6 +815,7 @@ Device::BuiltinAction start_recovery(Device* device, const std::vector<std::stri
+         LOG(INFO) << "Installing package " << update_package << " with fuse";
+         status = InstallWithFuseFromPath(update_package, device);
+         LOG(INFO) << "Jade got status, which is " << status <<"\n";
++        write_ota_status(status);
+       } else if (auto memory_package = Package::CreateMemoryPackage(
+                      update_package,
+                      std::bind(&RecoveryUI::SetProgress, ui, std::placeholders::_1));
+diff --git a/recovery_utils/roots.cpp b/recovery_utils/roots.cpp
+index 5c95cba0..bdf71596 100644
+--- a/recovery_utils/roots.cpp
++++ b/recovery_utils/roots.cpp
+@@ -304,7 +304,7 @@ int setup_install_mounts() {
+       continue;
+     }
+ 
+-    if (entry.mount_point == "/tmp" || entry.mount_point == "/cache") {
++    if (entry.mount_point == "/tmp" || entry.mount_point == "/cache" || entry.mount_point == "/mota") {
+       if (ensure_path_mounted(entry.mount_point) != 0) {
+         LOG(ERROR) << "Failed to mount " << entry.mount_point;
+         return -1;
+-- 
+2.34.1
+
