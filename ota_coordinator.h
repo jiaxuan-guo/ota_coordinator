@@ -11,6 +11,7 @@
 #include <android/log.h>
 #include <cutils/properties.h>
 #include <cutils/android_reboot.h>
+#include "bootloader_message.h"
 
 #define LOG_TAG "ota_coordinator"
 #define ALOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__);
@@ -53,23 +54,6 @@ typedef struct {
     char options[64];
 } FstabEntry;
 
-typedef struct{
-    char command[32];
-    char status[32];
-    char recovery[768];
-    // The 'recovery' field used to be 1024 bytes.  It has only ever
-    // been used to store the recovery command line, so 768 bytes
-    // should be plenty.  We carve off the last 256 bytes to store the
-    // stage string (for multistage packages) and possible future
-    // expansion.
-    char stage[32];
-    char reserved[1184];
-    // The 'reserved' field used to be 224 bytes when it was initially
-    // carved off from the 1024-byte recovery field. Bump it up to
-    // 1184-byte so that the entire bootloader_message struct rounds up
-    // to 2048-byte.
-} bootloader_message;
-
 // tty settings
 void find_tty_by_pci_addr_helper(struct dirent *entry, char* tty, int *count);
 int find_tty_by_pci_addr(PCI_TTY_Config *config);
@@ -83,13 +67,16 @@ int receive_message(int fd, char *buf, size_t size);
 int read_misc_partition(void* buf, size_t size, char *misc_blk_device, size_t offset);
 int write_misc_partition(const void* buf, size_t size, char *misc_blk_device, size_t offset);
 int get_misc_blk_device(char *misc_blk_device);
+int get_bootloader_message(bootloader_message *boot, char* misc_blk_device);
+int get_bootloader_message_ab(bootloader_message_ab *boot_ab, char* misc_blk_device);
+int write_bootloader_message(bootloader_message *boot, char* misc_blk_device);
+int write_bootloader_message_ab(bootloader_message_ab *boot_ab, char* misc_blk_device);
 
 // handle responses
 int handle_responses(char *buf);
 int handle_start_ota(PCI_TTY_Config *config);
 int handle_ota_package_ready(PCI_TTY_Config *config);
 int write_recovery_to_bcb();
-int get_bootloader_message(bootloader_message *boot, char* misc_blk_device);
 int is_boot_cmd_empty(bootloader_message* boot);
 int isprint(int c);
 int handle_ota_package_not_ready(PCI_TTY_Config *config);

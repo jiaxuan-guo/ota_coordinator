@@ -1,7 +1,6 @@
 
 #include "ota_coordinator.h"
 
-#define BOOTLOADER_MESSAGE_OFFSET_IN_MISC 0
 #define ANDROID_RB_PROPERTY "sys.powerctl"
 #define OTA_PACKAGE "/data/ota/xxx.zip"
 #define RECOVERY_CMD "boot-recovery"
@@ -49,10 +48,6 @@ int is_boot_cmd_empty(bootloader_message* boot) {
     return 0;
 }
 
-int get_bootloader_message(bootloader_message *boot, char* misc_blk_device) {
-    return read_misc_partition(boot, sizeof(*boot), misc_blk_device, BOOTLOADER_MESSAGE_OFFSET_IN_MISC);
-}
-
 int write_recovery_to_bcb() {
     char misc_blk_device[256];
     bootloader_message boot;
@@ -70,7 +65,7 @@ int write_recovery_to_bcb() {
         return -1;
     }
     snprintf(log, sizeof(log), "<get before bebootloader message>\nboot.command: %s, boot.status: %s,\
-     boot.recovery: %s, boot.stage: %s\n\n",
+    boot.recovery: %s, boot.stage: %s\n\n",
     boot.command, boot.status, boot.recovery, boot.stage);
     log_wrapper(LOG_LEVEL_INFO, log);
 
@@ -81,14 +76,20 @@ int write_recovery_to_bcb() {
     // Update the boot command field if it's empty, and preserve
     // the other arguments in the bootloader message.
     if (!is_boot_cmd_empty(&boot)) {
+        log_wrapper(LOG_LEVEL_INFO, "boot.command is empty, write recovery into it.\n");
         strlcpy(boot.command, RECOVERY_CMD, sizeof(RECOVERY_CMD));
         strlcpy(boot.recovery, RECOVERY_PATH, sizeof(RECOVERY_PATH));
-        if (write_misc_partition(&boot, sizeof(boot), misc_blk_device, BOOTLOADER_MESSAGE_OFFSET_IN_MISC)==-1) {
+        if (write_bootloader_message(&boot, misc_blk_device)==-1) {
             log_wrapper(LOG_LEVEL_ERROR, "Failed to set bootloader message\n");
             return -1;
         }
-        snprintf(log, sizeof(log), "<get after bootloader message>\nboot.command: %s, boot.status: %s,\
-         boot.recovery: %s, boot.stage: %s\n\n",
+        // check and log
+        if (get_bootloader_message(&boot, misc_blk_device)==-1) {
+            log_wrapper(LOG_LEVEL_ERROR, "Failed to get_misc_blk_device\n");
+            return -1;
+        }
+        snprintf(log, sizeof(log), "<get after bebootloader message>\nboot.command: %s, boot.status: %s,\
+        boot.recovery: %s, boot.stage: %s\n\n",
         boot.command, boot.status, boot.recovery, boot.stage);
         log_wrapper(LOG_LEVEL_INFO, log);
     } else {
@@ -210,7 +211,7 @@ int main(int argc, char* argv[]) {
         if (receive_message(config.fd_read, buf, sizeof(buf) - 1)==0) {
             //handle
             response = handle_responses(buf);
-            snprintf(log, sizeof(log), "Received: code=%d, buf=%s\n", response, buf);
+            snprintf(log, sizeof(log), "Received: response code=%d, buf=%s\n", response, buf);
             log_wrapper(LOG_LEVEL_INFO, log);
             switch (response) {
                 case START_OTA:
