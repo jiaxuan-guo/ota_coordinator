@@ -12,6 +12,7 @@
 #include <cutils/properties.h>
 #include <cutils/android_reboot.h>
 #include "bootloader_message.h"
+#include <sys/mount.h>
 
 #define IS_RECOVERY (access("/system/bin/recovery", F_OK) == 0)
 #define LOG_TAG "ota_coordinator"
@@ -45,7 +46,9 @@ enum Response{
     PACKAGE_NOT_READY,
     START_INSTALL,
     ROLLBACK,
-    UNDEFIINED
+    DEBUG_MOUNT,
+    DEBUG_UMOUNT,
+    UNDEFIINED=255
 };
 
 typedef struct {

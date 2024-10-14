@@ -1,11 +1,10 @@
-
 #include "ota_coordinator.h"
 
 #define ANDROID_RB_PROPERTY "sys.powerctl"
-#define OTA_PACKAGE "/data/ota/xxx.zip"
+#define OTA_PACKAGE "/mota/aaos_iasw-ota-eng.jade.zip"
 #define RECOVERY_CMD "boot-recovery"
-// #define RECOVERY_PATH "recovery\n--wipe_data"
-#define RECOVERY_PATH "recovery\n--update_package=/udiska/aaos_iasw-ota-eng.jade.zip"
+// #define RECOVERY_PATH "recovery\n--update_package=/udiska/aaos_iasw-ota-eng.jade.zip\n--dont_reboot"
+#define RECOVERY_PATH "recovery\n--update_package=/mota/aaos_iasw-ota-eng.jade.zip\n--dont_reboot\n--virtiofs"
 
 void log_wrapper(LogLevel level, const char *log) {
     if (IS_RECOVERY) {
@@ -164,6 +163,26 @@ int handle_start_install(PCI_TTY_Config *config) {
     return 0;
 }
 
+int debug_mount(){
+    if (mount("myfs", "/mota", "virtiofs", 0, NULL) == -1) {
+        log_wrapper(LOG_LEVEL_ERROR,"Error mounting myfs on /mota\n");
+        return 1;
+    }
+
+    log_wrapper(LOG_LEVEL_INFO,"Successfully mounted myfs on /mota\n");
+    return 0;
+}
+
+int debug_umount() {
+    if (umount("/mota") == -1) {
+        log_wrapper(LOG_LEVEL_ERROR,"Error umounting myfs on /mota\n");
+        return 1;
+    }
+
+    log_wrapper(LOG_LEVEL_INFO,"Successfully umounted myfs on /mota\n");
+    return 0;
+}
+
 int handle_rollback() {
     char misc_blk_device[256];
     bootloader_message_ab boot_ab;
@@ -252,6 +271,10 @@ int handle_responses(char *buf) {
         return START_INSTALL;
     } else if (strncmp(buf, "start_rollback", sizeof("start_rollback")-1) == 0) {
         return ROLLBACK;
+    } else if (strncmp(buf, "mount", sizeof("mount")-1) == 0) {
+        return DEBUG_MOUNT;
+    } else if (strncmp(buf, "umount", sizeof("umount")-1) == 0) {
+        return DEBUG_UMOUNT;
     } else {
         return UNDEFIINED;
     }
@@ -302,6 +325,13 @@ int main(int argc, char* argv[]) {
                     break;
                 case ROLLBACK:
                     handle_rollback();
+                    break;
+                // there are for debug only
+                case DEBUG_MOUNT:
+                    debug_mount();
+                    break;
+                case DEBUG_UMOUNT:
+                    debug_umount();
                     break;
                 case UNDEFIINED:
                     break;
