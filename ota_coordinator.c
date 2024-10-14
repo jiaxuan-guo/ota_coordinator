@@ -34,17 +34,17 @@ int isprint(int c) {
 
 int is_boot_cmd_empty(bootloader_message* boot) {
     if (boot->command[0] == '\0')
-        return 0;
+        return 1;
 
     for (size_t i = 0; i < sizeof(boot->command); ++i) {
         if (boot->command[i] == '\0')
-            return 1;
+            return 0;
         if (!isprint(boot->command[i]))
             break;
     }
 
     memset(boot->command, 0, sizeof(boot->command));
-    return 0;
+    return 1;
 }
 
 int write_recovery_to_bcb() {
@@ -74,7 +74,7 @@ int write_recovery_to_bcb() {
 
     // Update the boot command field if it's empty, and preserve
     // the other arguments in the bootloader message.
-    if (!is_boot_cmd_empty(&boot)) {
+    if (is_boot_cmd_empty(&boot)) {
         log_wrapper(LOG_LEVEL_INFO, "boot.command is empty, write recovery into it.\n");
         strlcpy(boot.command, RECOVERY_CMD, sizeof(RECOVERY_CMD));
         strlcpy(boot.recovery, RECOVERY_PATH, sizeof(RECOVERY_PATH));
