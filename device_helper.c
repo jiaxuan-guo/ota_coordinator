@@ -40,19 +40,19 @@ int read_misc_partition(void* buf, size_t size, char *misc_blk_device, size_t of
 
     file = fopen(misc_blk_device, "r");
     if (file == NULL) {
-        perror("Failed to open misc file");
+        log_wrapper(LOG_LEVEL_ERROR, "Failed to open misc file");
         return -1;
     }
 
     if (fseek(file, offset, SEEK_SET) != 0) {
-        perror("Failed to seek to the beginning of the file");
+        log_wrapper(LOG_LEVEL_ERROR, "Failed to seek to the beginning of the file");
         fclose(file);
         return -1;
     }
 
     bytesRead = fread(buf, sizeof(char), size, file);
     if (bytesRead == 0 && ferror(file)) {
-        perror("Failed to read file");
+        log_wrapper(LOG_LEVEL_ERROR, "Failed to read file");
         fclose(file);
         return -1;
     }
@@ -68,25 +68,25 @@ int write_misc_partition(const void* buf, size_t size, char *misc_blk_device, si
 
     fd = open(misc_blk_device, O_WRONLY);
     if (fd == -1) {
-        perror("Failed to open misc file");
+        log_wrapper(LOG_LEVEL_ERROR, "Failed to open misc file");
         return -1;
     }
 
     if (lseek(fd, offset, SEEK_SET) != 0) {
-        perror("Failed to seek to the beginning of the file");
+        log_wrapper(LOG_LEVEL_ERROR, "Failed to seek to the beginning of the file");
         close(fd);
         return -1;
     }
 
     bytesWritten = write(fd, buf, size);
     if (bytesWritten != size) {
-        perror("Failed to write file");
+        log_wrapper(LOG_LEVEL_ERROR, "Failed to write file");
         close(fd);
         return -1;
     }
 
     if (fsync(fd) == -1) {
-        perror("Failed to sync data to disk");
+        log_wrapper(LOG_LEVEL_ERROR, "Failed to sync data to disk");
         close(fd);
         return -1;
     }
@@ -107,7 +107,7 @@ int get_misc_blk_device(char *misc_blk_device) {
     }
 
     if (file == NULL) {
-        perror("Failed to open fstab file");
+        log_wrapper(LOG_LEVEL_ERROR, "Failed to open fstab file");
         return -1;
     }
 
@@ -132,7 +132,7 @@ int get_misc_blk_device(char *misc_blk_device) {
         }
     }
     fclose(file);
-    perror("Couldn't find the misc device\n");
+    log_wrapper(LOG_LEVEL_ERROR, "Couldn't find the misc device\n");
     return -1;
 }
 
