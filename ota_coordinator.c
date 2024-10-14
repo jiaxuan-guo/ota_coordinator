@@ -123,12 +123,22 @@ int handle_ota_package_not_ready(PCI_TTY_Config *config){
     return 0;
 }
 
+int shutdown() {
+    char log[256];
+    int ret = property_set(ANDROID_RB_PROPERTY, "shutdown");
+
+    if (ret < 0) {
+        log_wrapper(LOG_LEVEL_ERROR,"Shutdown failed\n");
+        return -1;
+    } else {
+        snprintf(log, sizeof(log), "Script executed with exit status: %d\n", WEXITSTATUS(ret));
+        log_wrapper(LOG_LEVEL_INFO, log);
+        return 0;
+    }
+}
+
 //All VMs set the next boot target as recovery, notify SOS, shutdown
 int handle_ota_package_ready(PCI_TTY_Config *config) {
-    char log[256];
-    int ret;
-
-    //write recovery into BCB(bootloader control block)
     write_recovery_to_bcb();
 
     //notify SOS
@@ -137,16 +147,7 @@ int handle_ota_package_ready(PCI_TTY_Config *config) {
         return EXIT_FAILURE;
     }
 
-    // shutdown
-    ret = property_set(ANDROID_RB_PROPERTY, "shutdown");
-    if (ret < 0) {
-        log_wrapper(LOG_LEVEL_ERROR,"Shutdown failed\n");
-        return 1;
-    } else {
-        snprintf(log, sizeof(log), "Script executed with exit status: %d\n", WEXITSTATUS(ret));
-        log_wrapper(LOG_LEVEL_INFO, log);
-    }
-    return 0;
+    return shutdown();
 }
 
 // install the package and send the notification to SOS
