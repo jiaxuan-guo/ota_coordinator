@@ -163,6 +163,51 @@ int handle_start_install(PCI_TTY_Config *config) {
     return 0;
 }
 
+int debug_get_slot_info() {
+    char misc_blk_device[256];
+    bootloader_message_ab boot_ab;
+    char log[256];
+    struct slot_metadata *slot_info[4]; // Per-slot information.  Up to 4 slots.
+    int max_priority = 0, max_index;
+
+    if (get_misc_blk_device(misc_blk_device)==-1) {
+        log_wrapper(LOG_LEVEL_ERROR, "Failed to get_misc_blk_device\n");
+        return -1;
+    }
+    snprintf(log, sizeof(log), "misc_blk_device: %s\n", misc_blk_device);
+    log_wrapper(LOG_LEVEL_INFO, log);
+
+    if (get_bootloader_message_ab(&boot_ab, misc_blk_device)==-1) {
+        log_wrapper(LOG_LEVEL_ERROR, "Failed to get_misc_blk_device\n");
+        return -1;
+    }
+    snprintf(log, sizeof(log), "bootloader_ctrl.magic: 0x%x, boot.nb_slot: %d, \n\n",
+    boot_ab.bootloader_ctrl.magic, boot_ab.bootloader_ctrl.nb_slot);
+    log_wrapper(LOG_LEVEL_INFO, log);
+    // Support there are 2 slots
+    // For each slot
+    for (int i = 0; i < boot_ab.bootloader_ctrl.nb_slot; ++i) {
+        slot_info[i] = &boot_ab.bootloader_ctrl.slot_info[i];
+        if (slot_info[i]->priority == 0) {
+            snprintf(log, sizeof(log), "slot %d is unbootable! Cannot rollback, return -1", i);
+            log_wrapper(LOG_LEVEL_INFO, log);
+            return -1;
+        }
+        if (slot_info[i]->priority >= max_priority) {
+            max_index = i;
+            max_priority = slot_info[i]->priority;
+        }
+        snprintf(log, sizeof(log), "slot %d, priority: %d, successful_boot: %d, tries_remaining: %d, verity_corrupted: %d \n",
+        i, slot_info[i]->priority,slot_info[i]->successful_boot,slot_info[i]->tries_remaining,slot_info[i]->verity_corrupted);
+        log_wrapper(LOG_LEVEL_INFO, log);
+    }
+
+    snprintf(log, sizeof(log), "max_index: %d, max_priority: %d \n\n",
+    max_index, max_priority);
+    log_wrapper(LOG_LEVEL_INFO, log);
+    return 0;
+}
+
 int debug_mount(){
     if (mount("myfs", "/mota", "virtiofs", 0, NULL) == -1) {
         log_wrapper(LOG_LEVEL_ERROR,"Error mounting myfs on /mota\n");
@@ -271,6 +316,8 @@ int handle_responses(char *buf) {
         return START_INSTALL;
     } else if (strncmp(buf, "start_rollback", sizeof("start_rollback")-1) == 0) {
         return ROLLBACK;
+    } else if (strncmp(buf, "debug_slot_info", sizeof("debug_slot_info")-1) == 0) {
+        return DEBUG_GET_SLOT_INFO;
     } else if (strncmp(buf, "mount", sizeof("mount")-1) == 0) {
         return DEBUG_MOUNT;
     } else if (strncmp(buf, "umount", sizeof("umount")-1) == 0) {
@@ -327,6 +374,9 @@ int main(int argc, char* argv[]) {
                     handle_rollback();
                     break;
                 // there are for debug only
+                case DEBUG_GET_SLOT_INFO:
+                    debug_get_slot_info();
+                    break;
                 case DEBUG_MOUNT:
                     debug_mount();
                     break;
