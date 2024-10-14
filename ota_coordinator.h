@@ -20,6 +20,8 @@
 #define ALOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__);
 #define ALOGW(...) __android_log_print(ANDROID_LOG_WARN, LOG_TAG, __VA_ARGS__);
 #define ALOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__);
+#define EVENT_SIZE  (sizeof(struct inotify_event))
+#define EVENT_BUF_LEN     (1024 * (EVENT_SIZE + 16))
 
 typedef enum {
     LOG_LEVEL_DEBUG,
@@ -49,6 +51,7 @@ enum Response{
     DEBUG_GET_SLOT_INFO,
     DEBUG_MOUNT,
     DEBUG_UMOUNT,
+    DEBUG_INOTIFY,
     UNDEFIINED=255
 };
 

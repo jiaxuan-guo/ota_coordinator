@@ -1,4 +1,6 @@
 #include "ota_coordinator.h"
+#include <sys/inotify.h>
+#include <errno.h>
 
 #define ANDROID_RB_PROPERTY "sys.powerctl"
 #define OTA_PACKAGE "/mota/aaos_iasw-ota-eng.jade.zip"
@@ -228,6 +230,107 @@ int debug_umount() {
     return 0;
 }
 
+int get_ota_status(int *status) {
+    char line[256];
+    FILE *file = fopen("/data/ota_status", "r");
+    char log[256];
+    log_wrapper(LOG_LEVEL_INFO, "get_ota_status start\n");
+    if (file == NULL) {
+        log_wrapper(LOG_LEVEL_ERROR,"Failed to open /data/ota_status\n");
+        return -1;
+    }
+
+    while (fgets(line, sizeof(line), file)) {
+        char *equalsSign = strchr(line, '=');
+        if (equalsSign != NULL) {
+            char *value = equalsSign + 1;
+
+            size_t len = strlen(value);
+            if (len > 0 && value[len - 1] == '\n') {
+                value[len - 1] = '\0';
+            }
+            *status = atoi(value);
+            snprintf(log, sizeof(log), "value: %s, status: %d", value, *status);
+            log_wrapper(LOG_LEVEL_INFO, log);
+        }
+    }
+    fclose(file);
+    return 0;
+}
+
+int debug_inotify() {
+    int length, i=0;
+    int fd;
+    int wd;
+    int flags;
+    char buffer[EVENT_BUF_LEN];
+    char log[64];
+    int keep=1;
+    int status = -1;
+
+    log_wrapper(LOG_LEVEL_ERROR, "debug_inotify start\n");
+    fd = inotify_init();
+    if (fd < 0) {
+        log_wrapper(LOG_LEVEL_ERROR, "inotify_init");
+        return -1;
+    }
+    flags = fcntl(fd, F_GETFL, 0);
+    fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+
+    wd = inotify_add_watch(fd, "/data", IN_MODIFY | IN_CREATE | IN_DELETE);
+    if (wd == -1) {
+        log_wrapper(LOG_LEVEL_ERROR, "inotify_add_watch");
+        close(fd);
+        return -1;
+    }
+    log_wrapper(LOG_LEVEL_INFO, "inotify_add_watch done");
+
+    while (keep) {
+        i = 0;
+        length = read(fd, buffer, EVENT_BUF_LEN);
+        if (length < 0) {
+            if (errno == EAGAIN) {
+                usleep(100000);
+                continue;
+            } else {
+                log_wrapper(LOG_LEVEL_ERROR, "read");
+                break;
+            }
+        }
+
+        while (i < length) {
+            struct inotify_event *event = (struct inotify_event *) &buffer[i];
+            if (event->len && strncmp(event->name, "ota_status", sizeof("ota_status")-1)==0) {
+                if (event->mask & IN_CREATE) {
+                    get_ota_status(&status);
+                    snprintf(log, sizeof(log), "The file %s was created, status: %d\n", event->name, status);
+                    log_wrapper(LOG_LEVEL_INFO, log);
+                    if(status==0) {
+                        shutdown();
+                    }
+                } else if (event->mask & IN_DELETE) {
+                    snprintf(log, sizeof(log), "The file %s was deleted.\n", event->name);
+                    log_wrapper(LOG_LEVEL_INFO, log);
+                    keep=0;
+                } else if (event->mask & IN_MODIFY) {
+                    get_ota_status(&status);
+                    snprintf(log, sizeof(log), "The file %s was modified, status: %d\n", event->name, status);
+                    log_wrapper(LOG_LEVEL_INFO, log);
+                    if(status==0) {
+                        shutdown();
+                    }
+                }
+            }
+            i += EVENT_SIZE + event->len;
+        }
+    }
+
+    inotify_rm_watch(fd, wd);
+    log_wrapper(LOG_LEVEL_INFO, "inotify_rm_watch done\n");
+    close(fd);
+    return 0;
+}
+
 int handle_rollback() {
     char misc_blk_device[256];
     bootloader_message_ab boot_ab;
@@ -322,6 +425,8 @@ int handle_responses(char *buf) {
         return DEBUG_MOUNT;
     } else if (strncmp(buf, "umount", sizeof("umount")-1) == 0) {
         return DEBUG_UMOUNT;
+    } else if (strncmp(buf, "inotify", sizeof("inotify")-1) == 0) {
+        return DEBUG_INOTIFY;
     } else {
         return UNDEFIINED;
     }
@@ -347,6 +452,10 @@ int main(int argc, char* argv[]) {
     if (build_connection(&config)!=0) {
         log_wrapper(LOG_LEVEL_ERROR, "Failed to build connection.\n");
         return EXIT_FAILURE;
+    }
+
+    if (IS_RECOVERY) {
+        debug_inotify();
     }
 
     while(1) {
@@ -383,6 +492,8 @@ int main(int argc, char* argv[]) {
                 case DEBUG_UMOUNT:
                     debug_umount();
                     break;
+                case DEBUG_INOTIFY:
+                    debug_inotify();
                 case UNDEFIINED:
                     break;
             }
