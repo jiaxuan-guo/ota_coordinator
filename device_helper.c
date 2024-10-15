@@ -1,6 +1,9 @@
 #include "ota_coordinator.h"
 #define FSTAB_PATH "/vendor/etc/fstab.aaos_iasw" //todo: different platform?
 #define FSTAB_PATH_RECOVERY "/etc/recovery.fstab"
+#define RECOVERY_CMD "boot-recovery"
+#define RECOVERY_OTA_UPDATE "recovery\n--update_package=/mota/aaos_iasw-ota-eng.jade.zip\n--dont_reboot\n--virtiofs"
+#define RECOVERY_WIPE_DATA "recovery\n--wipe_data"
 #define MISC_PART "/misc"
 #define MISC_LABEL "misc"
 
@@ -150,4 +153,60 @@ int write_bootloader_message(bootloader_message *boot, char* misc_blk_device) {
 
 int write_bootloader_message_ab(bootloader_message_ab *boot_ab, char* misc_blk_device) {
     return write_misc_partition(boot_ab, sizeof(*boot_ab), misc_blk_device, BOOTLOADER_MESSAGE_OFFSET_IN_MISC);
+}
+
+int write_data_to_bcb(enum OPERATION operation) {
+    char misc_blk_device[256];
+    bootloader_message boot;
+    char log[256];
+
+    if (get_misc_blk_device(misc_blk_device)==-1) {
+        log_wrapper(LOG_LEVEL_ERROR, "Failed to get_misc_blk_device\n");
+        return -1;
+    }
+    snprintf(log, sizeof(log), "misc_blk_device: %s\n", misc_blk_device);
+    log_wrapper(LOG_LEVEL_INFO, log);
+
+    if (get_bootloader_message(&boot, misc_blk_device)==-1) {
+        log_wrapper(LOG_LEVEL_ERROR, "Failed to get_misc_blk_device\n");
+        return -1;
+    }
+    snprintf(log, sizeof(log), "<get before bebootloader message>\nboot.command: %s, boot.status: %s,\
+    boot.recovery: %s, boot.stage: %s\n\n",
+    boot.command, boot.status, boot.recovery, boot.stage);
+    log_wrapper(LOG_LEVEL_INFO, log);
+
+    // if (!wait_for_device(misc_blk_device, err)) {
+    //     return false;
+    // }
+
+    // Update the boot command field if it's empty, and preserve
+    // the other arguments in the bootloader message.
+    if (is_boot_cmd_empty(&boot)) {
+        log_wrapper(LOG_LEVEL_INFO, "boot.command is empty, write recovery into it.\n");
+
+        if (operation == OTA_UPDATE) {
+            strlcpy(boot.command, RECOVERY_CMD, sizeof(RECOVERY_CMD));
+            strlcpy(boot.recovery, RECOVERY_OTA_UPDATE, sizeof(RECOVERY_OTA_UPDATE));
+        } else if (operation == WIPE_DATA) {
+            strlcpy(boot.command, RECOVERY_CMD, sizeof(RECOVERY_CMD));
+            strlcpy(boot.recovery, RECOVERY_WIPE_DATA, sizeof(RECOVERY_WIPE_DATA));
+        }
+        if (write_bootloader_message(&boot, misc_blk_device)==-1) {
+            log_wrapper(LOG_LEVEL_ERROR, "Failed to set bootloader message\n");
+            return -1;
+        }
+        // check and log
+        if (get_bootloader_message(&boot, misc_blk_device)==-1) {
+            log_wrapper(LOG_LEVEL_ERROR, "Failed to get_misc_blk_device\n");
+            return -1;
+        }
+        snprintf(log, sizeof(log), "<get after bebootloader message>\nboot.command: %s, boot.status: %s,\
+        boot.recovery: %s, boot.stage: %s\n\n",
+        boot.command, boot.status, boot.recovery, boot.stage);
+        log_wrapper(LOG_LEVEL_INFO, log);
+    } else {
+        log_wrapper(LOG_LEVEL_INFO, "boot.command is not empty, don't write recovery into it.\n");
+    }
+    return 0;
 }

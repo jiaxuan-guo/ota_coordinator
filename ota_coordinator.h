@@ -42,17 +42,24 @@ typedef struct {
 
 // If adding new responses here, please also update
 // handle_responses() as well as handle logic in main()
-enum Response{
+enum RESPONSE{
     START_OTA=0,
+    START_FACTORY_RESET,
     PACKAGE_READY,
     PACKAGE_NOT_READY,
+    FACTORY_RESET,
     START_INSTALL,
     ROLLBACK,
     DEBUG_GET_SLOT_INFO,
     DEBUG_MOUNT,
     DEBUG_UMOUNT,
     DEBUG_INOTIFY,
-    UNDEFIINED=255
+    UNDEFINED=255
+};
+
+enum OPERATION{
+    OTA_UPDATE=0,
+    WIPE_DATA
 };
 
 typedef struct {
@@ -79,13 +86,16 @@ int get_bootloader_message(bootloader_message *boot, char* misc_blk_device);
 int get_bootloader_message_ab(bootloader_message_ab *boot_ab, char* misc_blk_device);
 int write_bootloader_message(bootloader_message *boot, char* misc_blk_device);
 int write_bootloader_message_ab(bootloader_message_ab *boot_ab, char* misc_blk_device);
+int write_data_to_bcb(enum OPERATION operation);
 
 // handle responses
 int handle_responses(char *buf);
 int handle_start_ota(PCI_TTY_Config *config);
+int handle_factory_reset(PCI_TTY_Config *config);
 int handle_ota_package_ready(PCI_TTY_Config *config);
-int write_recovery_to_bcb();
 int is_boot_cmd_empty(bootloader_message* boot);
 int isprint(int c);
+int notify_and_shutdown(PCI_TTY_Config *config);
 int handle_ota_package_not_ready(PCI_TTY_Config *config);
 int handle_start_install(PCI_TTY_Config *config);
+int handle_start_factory_reset(PCI_TTY_Config *config);
