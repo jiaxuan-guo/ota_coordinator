@@ -137,17 +137,19 @@ int shutdown() {
     }
 }
 
+// notify SOS and shutdown
+int notify_and_shutdown() {
+    if (send_message(config->fd_write, "vm_shutdown\n")) {
+        log_wrapper(LOG_LEVEL_ERROR, "send vm_shutdown failed!\n");
+        return -1;
+    }
+    return shutdown();
+}
+
 //All VMs set the next boot target as recovery, notify SOS, shutdown
 int handle_ota_package_ready(PCI_TTY_Config *config) {
     write_recovery_to_bcb();
-
-    //notify SOS
-    if (send_message(config->fd_write, "vm_shutdown\n")) {
-        log_wrapper(LOG_LEVEL_ERROR, "send_message failed!\n");
-        return EXIT_FAILURE;
-    }
-
-    return shutdown();
+    return notify_and_shutdown();
 }
 
 // install the package and send the notification to SOS
