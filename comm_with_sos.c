@@ -22,7 +22,7 @@ void find_tty_by_pci_addr_helper(struct dirent *entry, char* tty, int *count) {
     }
 }
 
-int find_tty_by_pci_addr(PCI_TTY_Config *config) {
+int find_tty_by_pci_addr() {
     DIR *dir;
     struct dirent *entry;
     int ret = -2;
@@ -37,10 +37,10 @@ int find_tty_by_pci_addr(PCI_TTY_Config *config) {
     // Iterate over each PCI device
     while ((entry = readdir(dir)) != NULL) {
         if (entry->d_type == DT_LNK) {
-            if (strcmp(entry->d_name, config->pci_read) == 0){
-                find_tty_by_pci_addr_helper(entry, config->tty_read, &ret);
-            } else if (strcmp(entry->d_name, config->pci_write) == 0){
-                find_tty_by_pci_addr_helper(entry, config->tty_write, &ret);
+            if (strcmp(entry->d_name, config.pci_read) == 0){
+                find_tty_by_pci_addr_helper(entry, config.tty_read, &ret);
+            } else if (strcmp(entry->d_name, config.pci_write) == 0){
+                find_tty_by_pci_addr_helper(entry, config.tty_write, &ret);
             }
         }
     }
@@ -86,19 +86,19 @@ void config_uart(int fd, int isICANON) {
     set_blocking(fd);
 }
 
-int build_connection(PCI_TTY_Config *config) {
+int build_connection() {
     // open both read and write tty devices
-    if (find_tty_by_pci_addr(config) == 0) {
+    if (find_tty_by_pci_addr() == 0) {
         ALOGD("\n<config>\npci_read:%s  tty_read:%s \npci_write:%s  tty_write:%s\n",
-        config->pci_read, config->tty_read, config->pci_write, config->tty_write);
+        config.pci_read, config.tty_read, config.pci_write, config.tty_write);
 
-        config->fd_read = open(config->tty_read, O_RDWR | O_NOCTTY);
-        if (config->fd_read == -1) {
+        config.fd_read = open(config.tty_read, O_RDWR | O_NOCTTY);
+        if (config.fd_read == -1) {
             log_wrapper(LOG_LEVEL_ERROR, "open fd_read");
             return -1;
         }
-        config->fd_write = open(config->tty_write, O_RDWR | O_NOCTTY);
-        if (config->fd_write == -1) {
+        config.fd_write = open(config.tty_write, O_RDWR | O_NOCTTY);
+        if (config.fd_write == -1) {
             log_wrapper(LOG_LEVEL_ERROR, "open fd_write");
             return -1;
         }
@@ -108,8 +108,8 @@ int build_connection(PCI_TTY_Config *config) {
     }
 
     // set uart configs
-    config_uart(config->fd_write, 1);
-    config_uart(config->fd_read, 0);
+    config_uart(config.fd_write, 1);
+    config_uart(config.fd_read, 0);
 
     return 0;
 }

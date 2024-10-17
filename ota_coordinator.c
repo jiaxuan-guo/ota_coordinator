@@ -46,16 +46,16 @@ int is_boot_cmd_empty(bootloader_message* boot) {
     return 1;
 }
 
-int handle_start_ota(PCI_TTY_Config *config) {
-    if (send_message(config->fd_write, "need_to_ota\n")) {
+int handle_start_ota() {
+    if (send_message(config.fd_write, "need_to_ota\n")) {
         log_wrapper(LOG_LEVEL_ERROR, "send_message failed!\n");
         return -1;
     }
     return 0;
 }
 
-int handle_start_factory_reset(PCI_TTY_Config *config) {
-    if (send_message(config->fd_write, "need_factory_reset\n")) {
+int handle_start_factory_reset() {
+    if (send_message(config.fd_write, "need_factory_reset\n")) {
         log_wrapper(LOG_LEVEL_ERROR, "send_message failed!\n");
         return -1;
     }
@@ -63,22 +63,17 @@ int handle_start_factory_reset(PCI_TTY_Config *config) {
 }
 
 // remove package and drop this update
-int handle_ota_package_not_ready(PCI_TTY_Config *config){
-    if (config == NULL) {
-        printf("");
-    }
-
+int handle_ota_package_not_ready(){
     if (remove(OTA_PACKAGE) == 0) {
         log_wrapper(LOG_LEVEL_INFO, "OTA_PACKAGE deleted successfully.\n");
     } else {
         log_wrapper(LOG_LEVEL_ERROR, "remove");
         return -1;
     }
-
     return 0;
 }
 
-int handle_factory_reset(PCI_TTY_Config *config) {
+int handle_factory_reset() {
     write_data_to_bcb(WIPE_DATA);
     return notify_and_shutdown(config);
 }
@@ -98,8 +93,8 @@ int do_shutdown() {
 }
 
 // notify SOS and shutdown
-int notify_and_shutdown(PCI_TTY_Config *config) {
-    if (send_message(config->fd_write, "vm_shutdown\n")) {
+int notify_and_shutdown() {
+    if (send_message(config.fd_write, "vm_shutdown\n")) {
         log_wrapper(LOG_LEVEL_ERROR, "send vm_shutdown failed!\n");
         return -1;
     }
@@ -107,18 +102,18 @@ int notify_and_shutdown(PCI_TTY_Config *config) {
 }
 
 //All VMs set the next boot target as recovery, notify SOS, shutdown
-int handle_ota_package_ready(PCI_TTY_Config *config) {
+int handle_ota_package_ready() {
     write_data_to_bcb(OTA_UPDATE);
-    return notify_and_shutdown(config);
+    return notify_and_shutdown();
 }
 
 // install the package and send the notification to SOS
-int handle_start_install(PCI_TTY_Config *config) {
+int handle_start_install() {
     // todo: start to install the package
 
 
     // installed well
-    if (send_message(config->fd_write, "successful\n")) {
+    if (send_message(config.fd_write, "successful\n")) {
         log_wrapper(LOG_LEVEL_ERROR, "send_message failed!\n");
         return -1;
     }
@@ -295,7 +290,7 @@ int debug_inotify() {
 
 #define BUFFER_SIZE 256
 #define OTA_SOCKET "ota_socket"
-int debug_socket(PCI_TTY_Config *config) {
+int debug_socket() {
     char buffer[BUFFER_SIZE];
     int service_sock = android_get_control_socket(OTA_SOCKET);
     char log[256];
@@ -336,7 +331,7 @@ int debug_socket(PCI_TTY_Config *config) {
         log_wrapper(LOG_LEVEL_INFO, log);
         if (strncmp(buffer, "start_factory_reset", sizeof("start_factory_reset")-1) == 0) {
             log_wrapper(LOG_LEVEL_INFO, "start handle_start_factory_reset\n");
-            handle_start_factory_reset(config);
+            handle_start_factory_reset();
         }
     }
 
@@ -452,9 +447,9 @@ int handle_responses(char *buf) {
     }
 }
 
+
 int main(int argc, char* argv[]) {
     char buf[256];
-    PCI_TTY_Config config;
     enum RESPONSE response;
     char log[256];
 
@@ -469,7 +464,7 @@ int main(int argc, char* argv[]) {
     config.pci_read = argc==3? argv[1]:"0000:00:0f.0";
     config.pci_write = argc==3? argv[2]:"0000:00:13.0";
 
-    if (build_connection(&config)!=0) {
+    if (build_connection()!=0) {
         log_wrapper(LOG_LEVEL_ERROR, "Failed to build connection.\n");
         return EXIT_FAILURE;
     }
@@ -488,22 +483,22 @@ int main(int argc, char* argv[]) {
             log_wrapper(LOG_LEVEL_INFO, log);
             switch (response) {
                 case START_OTA:
-                    handle_start_ota(&config);
+                    handle_start_ota();
                     break;
                 case START_FACTORY_RESET:
-                    handle_start_factory_reset(&config);
+                    handle_start_factory_reset();
                     break;
                 case PACKAGE_READY:
-                    handle_ota_package_ready(&config);
+                    handle_ota_package_ready();
                     break;
                 case PACKAGE_NOT_READY:
-                    handle_ota_package_not_ready(&config);
+                    handle_ota_package_not_ready();
                     break;
                 case FACTORY_RESET:
-                    handle_factory_reset(&config);
+                    handle_factory_reset();
                     break;
                 case START_INSTALL:
-                    handle_start_install(&config);
+                    handle_start_install();
                     break;
                 case ROLLBACK:
                     handle_rollback();
@@ -522,7 +517,7 @@ int main(int argc, char* argv[]) {
                     debug_inotify();
                     break;
                 case DEBUG_SOCKET:
-                    debug_socket(&config);
+                    debug_socket();
                     break;
                 case UNDEFINED:
                     break;

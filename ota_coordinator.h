@@ -40,6 +40,8 @@ typedef struct {
     int fd_write;
 } PCI_TTY_Config;
 
+PCI_TTY_Config config;
+
 // If adding new responses here, please also update
 // handle_responses() as well as handle logic in main()
 enum RESPONSE{
@@ -72,10 +74,10 @@ typedef struct {
 
 // tty settings
 void find_tty_by_pci_addr_helper(struct dirent *entry, char* tty, int *count);
-int find_tty_by_pci_addr(PCI_TTY_Config *config);
+int find_tty_by_pci_addr();
 int set_blocking(int fd);
 void config_uart(int fd, int isICANON);
-int build_connection(PCI_TTY_Config *config);
+int build_connection();
 int send_message(int fd, const char *message);
 int receive_message(int fd, char *buf, size_t size);
 
@@ -91,13 +93,13 @@ int write_data_to_bcb(enum OPERATION operation);
 
 // handle responses
 int handle_responses(char *buf);
-int handle_start_ota(PCI_TTY_Config *config);
-int handle_factory_reset(PCI_TTY_Config *config);
-int handle_ota_package_ready(PCI_TTY_Config *config);
+int handle_start_ota();
+int handle_factory_reset();
+int handle_ota_package_ready();
 int is_boot_cmd_empty(bootloader_message* boot);
 int isprint(int c);
-int notify_and_shutdown(PCI_TTY_Config *config);
-int handle_ota_package_not_ready(PCI_TTY_Config *config);
-int handle_start_install(PCI_TTY_Config *config);
-int handle_start_factory_reset(PCI_TTY_Config *config);
+int notify_and_shutdown();
+int handle_ota_package_not_ready();
+int handle_start_install();
+int handle_start_factory_reset();
 int do_shutdown();
