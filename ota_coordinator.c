@@ -1,6 +1,7 @@
 #include "ota_coordinator.h"
 #include <sys/inotify.h>
 #include <errno.h>
+#include <cutils/sockets.h>
 
 #define ANDROID_RB_PROPERTY "sys.powerctl"
 #define OTA_PACKAGE "/mota/aaos_iasw-ota-eng.jade.zip"
@@ -82,7 +83,7 @@ int handle_factory_reset(PCI_TTY_Config *config) {
     return notify_and_shutdown(config);
 }
 
-int shutdown() {
+int do_shutdown() {
     char log[256];
     int ret = property_set(ANDROID_RB_PROPERTY, "shutdown");
 
@@ -102,7 +103,7 @@ int notify_and_shutdown(PCI_TTY_Config *config) {
         log_wrapper(LOG_LEVEL_ERROR, "send vm_shutdown failed!\n");
         return -1;
     }
-    return shutdown();
+    return do_shutdown();
 }
 
 //All VMs set the next boot target as recovery, notify SOS, shutdown
@@ -267,7 +268,7 @@ int debug_inotify() {
                     snprintf(log, sizeof(log), "The file %s was created, status: %d\n", event->name, status);
                     log_wrapper(LOG_LEVEL_INFO, log);
                     if(status==0) {
-                        shutdown();
+                        do_shutdown();
                     }
                 } else if (event->mask & IN_DELETE) {
                     snprintf(log, sizeof(log), "The file %s was deleted.\n", event->name);
@@ -278,7 +279,7 @@ int debug_inotify() {
                     snprintf(log, sizeof(log), "The file %s was modified, status: %d\n", event->name, status);
                     log_wrapper(LOG_LEVEL_INFO, log);
                     if(status==0) {
-                        shutdown();
+                        do_shutdown();
                     }
                 }
             }
@@ -289,6 +290,58 @@ int debug_inotify() {
     inotify_rm_watch(fd, wd);
     log_wrapper(LOG_LEVEL_INFO, "inotify_rm_watch done\n");
     close(fd);
+    return 0;
+}
+
+#define BUFFER_SIZE 256
+#define OTA_SOCKET "ota_socket"
+int debug_socket(PCI_TTY_Config *config) {
+    char buffer[BUFFER_SIZE];
+    int service_sock = android_get_control_socket(OTA_SOCKET);
+    char log[256];
+
+    log_wrapper(LOG_LEVEL_INFO, "debug_socket START\n");
+    if (service_sock == -1) {
+        perror("failed to open socket");
+        return 1;
+    }
+    log_wrapper(LOG_LEVEL_INFO, "Open socket successfully\n");
+    if (fcntl(service_sock, F_SETFD, FD_CLOEXEC) == -1) {
+        perror("failed to set FD_CLOEXEC");
+        close(service_sock);
+        return 1;
+    }
+
+    if (listen(service_sock, 1) == -1) {
+        perror("failed to listen on socket");
+        close(service_sock);
+        return 1;
+    }
+    log_wrapper(LOG_LEVEL_INFO, "Server is listening...\n");
+    int client_sock = accept4(service_sock, NULL, NULL, SOCK_CLOEXEC);
+    if (client_sock == -1) {
+        perror("failed to accept on socket");
+        close(service_sock);
+        return 1;
+    }
+    log_wrapper(LOG_LEVEL_INFO, "accept4 socket successfully\n");
+
+    //handle
+    int bytes_received = recv(client_sock, buffer, BUFFER_SIZE, 0);
+    if (bytes_received < 0) {
+        log_wrapper(LOG_LEVEL_ERROR, "log");
+    } else {
+        buffer[bytes_received] = '\0';
+        snprintf(log, sizeof(log), "bytes_received: %d, Received message: %s\n", bytes_received, buffer);
+        log_wrapper(LOG_LEVEL_INFO, log);
+        if (strncmp(buffer, "start_factory_reset", sizeof("start_factory_reset")-1) == 0) {
+            log_wrapper(LOG_LEVEL_INFO, "start handle_start_factory_reset\n");
+            handle_start_factory_reset(config);
+        }
+    }
+
+    close(client_sock);
+    close(service_sock);
     return 0;
 }
 
@@ -392,6 +445,8 @@ int handle_responses(char *buf) {
         return DEBUG_UMOUNT;
     } else if (strncmp(buf, "inotify", sizeof("inotify")-1) == 0) {
         return DEBUG_INOTIFY;
+    } else if (strncmp(buf, "socket", sizeof("socket")-1) == 0) {
+        return DEBUG_SOCKET;
     } else {
         return UNDEFINED;
     }
@@ -446,6 +501,7 @@ int main(int argc, char* argv[]) {
                     break;
                 case FACTORY_RESET:
                     handle_factory_reset(&config);
+                    break;
                 case START_INSTALL:
                     handle_start_install(&config);
                     break;
@@ -464,6 +520,10 @@ int main(int argc, char* argv[]) {
                     break;
                 case DEBUG_INOTIFY:
                     debug_inotify();
+                    break;
+                case DEBUG_SOCKET:
+                    debug_socket(&config);
+                    break;
                 case UNDEFINED:
                     break;
             }

@@ -9,7 +9,7 @@ cc_binary {
     srcs: [
         "ota_coordinator.c",
         "device_helper.c",
-        "comm_helper.c",
+        "comm_with_sos.c",
     ],
     shared_libs: [
         "liblog",
@@ -28,7 +28,7 @@ cc_binary {
     srcs: [
         "ota_coordinator.c",
         "device_helper.c",
-        "comm_helper.c",
+        "comm_with_sos.c",
     ],
     shared_libs: [
         "liblog",

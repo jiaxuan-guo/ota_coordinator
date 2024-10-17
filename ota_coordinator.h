@@ -54,6 +54,7 @@ enum RESPONSE{
     DEBUG_MOUNT,
     DEBUG_UMOUNT,
     DEBUG_INOTIFY,
+    DEBUG_SOCKET,
     UNDEFINED=255
 };
 
@@ -99,3 +100,4 @@ int notify_and_shutdown(PCI_TTY_Config *config);
 int handle_ota_package_not_ready(PCI_TTY_Config *config);
 int handle_start_install(PCI_TTY_Config *config);
 int handle_start_factory_reset(PCI_TTY_Config *config);
+int do_shutdown();
