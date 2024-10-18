@@ -9,14 +9,15 @@ cc_binary {
     srcs: [
         "ota_coordinator.c",
         "device_helper.c",
-        "comm_with_sos.c",
+        "uart_helper.c",
+        "factory_reset_server.c",
+        "ota_update_server.c",
     ],
     shared_libs: [
         "liblog",
         "libcutils",
     ],
 }
-
 
 cc_binary {
     name: "ota_coordinator_recovery",
@@ -28,7 +29,9 @@ cc_binary {
     srcs: [
         "ota_coordinator.c",
         "device_helper.c",
-        "comm_with_sos.c",
+        "uart_helper.c",
+        "factory_reset_server.c",
+        "ota_update_server.c",
     ],
     shared_libs: [
         "liblog",

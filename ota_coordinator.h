@@ -13,6 +13,7 @@
 #include <cutils/android_reboot.h>
 #include "bootloader_message.h"
 #include <sys/mount.h>
+#include <pthread.h>
 
 #define IS_RECOVERY (access("/system/bin/recovery", F_OK) == 0)
 #define LOG_TAG "ota_coordinator"
@@ -56,7 +57,6 @@ enum RESPONSE{
     DEBUG_MOUNT,
     DEBUG_UMOUNT,
     DEBUG_INOTIFY,
-    DEBUG_SOCKET,
     UNDEFINED=255
 };
 
@@ -103,3 +103,13 @@ int handle_ota_package_not_ready();
 int handle_start_install();
 int handle_start_factory_reset();
 int do_shutdown();
+
+int handle_rollback();
+int debug_get_slot_info();
+int debug_mount();
+int debug_umount();
+int debug_inotify();
+
+//server
+void *factory_reset_thread();
+void *ota_update_thread();
