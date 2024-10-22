@@ -53,6 +53,7 @@ enum RESPONSE{
     FACTORY_RESET,
     START_INSTALL,
     ROLLBACK,
+    FACTORY_RESET_PROCESS,
     DEBUG_GET_SLOT_INFO,
     DEBUG_MOUNT,
     DEBUG_UMOUNT,
@@ -103,7 +104,7 @@ int handle_ota_package_not_ready();
 int handle_start_install();
 int handle_start_factory_reset();
 int do_shutdown();
-
+int redirect_log ();
 int handle_rollback();
 int debug_get_slot_info();
 int debug_mount();
@@ -111,5 +112,5 @@ int debug_umount();
 int debug_inotify();
 
 //server
-void *factory_reset_thread();
-void *ota_update_thread();
+void *factory_reset();
+void *ota_update();

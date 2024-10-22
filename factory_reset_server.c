@@ -4,7 +4,7 @@
 #define BUFFER_SIZE 256
 #define OTA_SOCKET "ota_socket"
 
-void *factory_reset_thread() {
+void *factory_reset() {
     char buffer[BUFFER_SIZE];
     int service_sock;
     char log[256];
@@ -56,7 +56,6 @@ void *factory_reset_thread() {
             }
         }
     }
-
 
     close(client_sock);
     close(service_sock);

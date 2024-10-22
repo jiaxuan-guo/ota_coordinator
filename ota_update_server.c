@@ -5,9 +5,35 @@
 #define ANDROID_RB_PROPERTY "sys.powerctl"
 #define OTA_PACKAGE "/mota/aaos_iasw-ota-eng.jade.zip"
 
+// there is no logcat under recovery, redirect log to /tmp/ota_coordinator.log
+int redirect_log () {
+    int fd = open("/tmp/ota_coordinator.log", O_WRONLY | O_CREAT | O_APPEND, 0644);
+    if (fd == -1) {
+        perror("open");
+        return -1;
+    }
+
+    if (dup2(fd, STDOUT_FILENO) == -1) {
+        perror("dup2");
+        close(fd);
+        return -1;
+    }
+
+    if (dup2(fd, STDERR_FILENO) == -1) {
+        perror("dup2");
+        close(fd);
+        return -1;
+    }
+
+    close(fd);
+    fprintf(stderr, "This is an error messag (test).\n");
+
+    return 0;
+}
+
 void log_wrapper(LogLevel level, const char *log) {
     if (IS_RECOVERY) {
-        printf("%s", log);
+        fprintf(stderr, "%s", log);
     } else {
         switch (level) {
             case LOG_LEVEL_DEBUG:
@@ -54,7 +80,7 @@ int handle_start_ota() {
 }
 
 int handle_start_factory_reset() {
-    if (send_message(config.fd_write, "need_factory_reset\n")) {
+    if (send_message(config.fd_write, "need_to_factory_reset\n")) {
         log_wrapper(LOG_LEVEL_ERROR, "send_message failed!\n");
         return -1;
     }
@@ -93,6 +119,7 @@ int do_shutdown() {
 
 // notify SOS and shutdown
 int notify_and_shutdown() {
+    sleep(5);
     if (send_message(config.fd_write, "vm_shutdown\n")) {
         log_wrapper(LOG_LEVEL_ERROR, "send vm_shutdown failed!\n");
         return -1;
@@ -206,7 +233,7 @@ int get_ota_status(int *status) {
                 value[len - 1] = '\0';
             }
             *status = atoi(value);
-            snprintf(log, sizeof(log), "value: %s, status: %d", value, *status);
+            snprintf(log, sizeof(log), "value: %s, status: %d\n", value, *status);
             log_wrapper(LOG_LEVEL_INFO, log);
         }
     }
@@ -239,7 +266,7 @@ int debug_inotify() {
         close(fd);
         return -1;
     }
-    log_wrapper(LOG_LEVEL_INFO, "inotify_add_watch done");
+    log_wrapper(LOG_LEVEL_INFO, "inotify_add_watch done\n");
 
     while (keep) {
         i = 0;
@@ -262,7 +289,13 @@ int debug_inotify() {
                     snprintf(log, sizeof(log), "The file %s was created, status: %d\n", event->name, status);
                     log_wrapper(LOG_LEVEL_INFO, log);
                     if(status==0) {
-                        do_shutdown();
+                        keep=0;
+                        if (send_message(config.fd_write, "vm_status_successful\n")) {
+                            log_wrapper(LOG_LEVEL_ERROR, "send vm_status_successful failed!\n");
+                            return -1;
+                        }
+                        // notify_and_shutdown();
+                        break;
                     }
                 } else if (event->mask & IN_DELETE) {
                     snprintf(log, sizeof(log), "The file %s was deleted.\n", event->name);
@@ -273,7 +306,13 @@ int debug_inotify() {
                     snprintf(log, sizeof(log), "The file %s was modified, status: %d\n", event->name, status);
                     log_wrapper(LOG_LEVEL_INFO, log);
                     if(status==0) {
-                        do_shutdown();
+                        keep=0;
+                        if (send_message(config.fd_write, "vm_status_successful\n")) {
+                            log_wrapper(LOG_LEVEL_ERROR, "send vm_status_successful failed!\n");
+                            return -1;
+                        }
+                        // notify_and_shutdown();
+                        break;
                     }
                 }
             }
@@ -364,6 +403,10 @@ int handle_rollback() {
     return 0;
 }
 
+int handle_factory_reset_process() {
+    return notify_and_shutdown();
+}
+
 int handle_responses(char *buf) {
     if (strncmp(buf, "start_ota", sizeof("start_ota")-1)==0) {
         return START_OTA;
@@ -373,12 +416,14 @@ int handle_responses(char *buf) {
         return PACKAGE_READY;
     } else if (strncmp(buf, "package_not_ready", sizeof("package_not_ready")-1) == 0) {
         return PACKAGE_NOT_READY;
-    } else if (strncmp(buf, "factory_reset", sizeof("factory_reset")-1) == 0) {
+    } else if (strncmp(buf, "start_to_factory_reset", sizeof("start_to_factory_reset")-1) == 0) {
         return FACTORY_RESET;
     } else if (strncmp(buf, "start_install", sizeof("start_install")-1) == 0) {
         return START_INSTALL;
     } else if (strncmp(buf, "start_rollback", sizeof("start_rollback")-1) == 0) {
         return ROLLBACK;
+    } else if (strncmp(buf, "factory_reset_process", sizeof("factory_reset_process")-1) == 0) {
+        return FACTORY_RESET_PROCESS;
     } else if (strncmp(buf, "debug_slot_info", sizeof("debug_slot_info")-1) == 0) {
         return DEBUG_GET_SLOT_INFO;
     } else if (strncmp(buf, "mount", sizeof("mount")-1) == 0) {
@@ -392,7 +437,7 @@ int handle_responses(char *buf) {
     }
 }
 
-void *ota_update_thread() {
+void *ota_update() {
     enum RESPONSE response;
     char buf[256];
     char log[256];
@@ -402,9 +447,9 @@ void *ota_update_thread() {
         return NULL;
     }
 
-    // if (IS_RECOVERY) {
-    //     debug_inotify();
-    // }
+    if (IS_RECOVERY) {
+        debug_inotify();
+    }
 
     while(1) {
         memset(buf, 0, sizeof(buf));
@@ -435,6 +480,9 @@ void *ota_update_thread() {
                     break;
                 case ROLLBACK:
                     handle_rollback();
+                    break;
+                case FACTORY_RESET_PROCESS:
+                    handle_factory_reset_process();
                     break;
                 // there are for debug only
                 case DEBUG_GET_SLOT_INFO:
