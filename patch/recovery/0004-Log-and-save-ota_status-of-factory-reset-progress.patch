@@ -1,0 +1,26 @@
+From f1b181957d9bf934389d36069f4c5f26b9ceaf11 Mon Sep 17 00:00:00 2001
+From: "Guo, Jade" <jade.guo@intel.com>
+Date: Tue, 22 Oct 2024 18:14:33 +0800
+Subject: [PATCH] Log and save ota_status of factory reset progress
+
+Signed-off-by: Guo, Jade <jade.guo@intel.com>
+---
+ recovery.cpp | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/recovery.cpp b/recovery.cpp
+index 02ebe0cc..d8ea9bbb 100644
+--- a/recovery.cpp
++++ b/recovery.cpp
+@@ -860,6 +860,8 @@ Device::BuiltinAction start_recovery(Device* device, const std::vector<std::stri
+     if (!WipeData(device)) {
+       status = INSTALL_ERROR;
+     }
++    LOG(INFO) << "Jade got status, which is " << status <<"\n";
++    write_ota_status(status);
+   } else if (should_prompt_and_wipe_data) {
+     // Trigger the logging to capture the cause, even if user chooses to not wipe data.
+     save_current_log = true;
+-- 
+2.34.1
+
