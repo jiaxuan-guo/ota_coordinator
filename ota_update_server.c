@@ -407,6 +407,10 @@ int handle_factory_reset_process() {
     return notify_and_shutdown();
 }
 
+int handle_ota_update_process() {
+    return notify_and_shutdown();
+}
+
 int handle_responses(char *buf) {
     if (strncmp(buf, "start_ota", sizeof("start_ota")-1)==0) {
         return START_OTA;
@@ -422,6 +426,8 @@ int handle_responses(char *buf) {
         return START_INSTALL;
     } else if (strncmp(buf, "start_rollback", sizeof("start_rollback")-1) == 0) {
         return ROLLBACK;
+    } else if (strncmp(buf, "ota_process", sizeof("ota_process")-1) == 0) {
+        return OTA_UPDATE_PROCESS;
     } else if (strncmp(buf, "factory_reset_process", sizeof("factory_reset_process")-1) == 0) {
         return FACTORY_RESET_PROCESS;
     } else if (strncmp(buf, "debug_slot_info", sizeof("debug_slot_info")-1) == 0) {
@@ -480,6 +486,9 @@ void *ota_update() {
                     break;
                 case ROLLBACK:
                     handle_rollback();
+                    break;
+                case OTA_UPDATE_PROCESS:
+                    handle_ota_update_process();
                     break;
                 case FACTORY_RESET_PROCESS:
                     handle_factory_reset_process();
