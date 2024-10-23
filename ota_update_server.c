@@ -119,7 +119,7 @@ int do_shutdown() {
 
 // notify SOS and shutdown
 int notify_and_shutdown() {
-    sleep(5);
+    usleep(3000000);
     if (send_message(config.fd_write, "vm_shutdown\n")) {
         log_wrapper(LOG_LEVEL_ERROR, "send vm_shutdown failed!\n");
         return -1;
