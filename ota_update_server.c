@@ -3,7 +3,7 @@
 #include <errno.h>
 #include <sys/inotify.h>
 #define ANDROID_RB_PROPERTY "sys.powerctl"
-#define OTA_PACKAGE "/mota/aaos_iasw-ota-eng.jade.zip"
+#define OTA_PACKAGE "/data/vendor/ota/aaos_iasw-ota-eng.jade.zip"
 
 // there is no logcat under recovery, redirect log to /tmp/ota_coordinator.log
 int redirect_log () {
@@ -73,7 +73,7 @@ int is_boot_cmd_empty(bootloader_message* boot) {
 
 int handle_start_ota() {
     if (send_message(config.fd_write, "need_to_ota\n")) {
-        log_wrapper(LOG_LEVEL_ERROR, "send_message failed!\n");
+        log_wrapper(LOG_LEVEL_ERROR, "send need_to_ota failed!\n");
         return -1;
     }
     return 0;
@@ -81,7 +81,7 @@ int handle_start_ota() {
 
 int handle_start_factory_reset() {
     if (send_message(config.fd_write, "need_to_factory_reset\n")) {
-        log_wrapper(LOG_LEVEL_ERROR, "send_message failed!\n");
+        log_wrapper(LOG_LEVEL_ERROR, "send need_to_factory_reset failed!\n");
         return -1;
     }
     return 0;
@@ -140,7 +140,7 @@ int handle_start_install() {
 
     // installed well
     if (send_message(config.fd_write, "successful\n")) {
-        log_wrapper(LOG_LEVEL_ERROR, "send_message failed!\n");
+        log_wrapper(LOG_LEVEL_ERROR, "send successful failed!\n");
         return -1;
     }
 
@@ -194,22 +194,22 @@ int debug_get_slot_info() {
 }
 
 int debug_mount() {
-    if (mount("myfs", "/mota", "virtiofs", 0, NULL) == -1) {
-        log_wrapper(LOG_LEVEL_ERROR,"Error mounting myfs on /mota\n");
+    if (mount("myfs", "/data/vendor/ota", "virtiofs", 0, NULL) == -1) {
+        log_wrapper(LOG_LEVEL_ERROR,"Error mounting myfs on /data/vendor/ota\n");
         return 1;
     }
 
-    log_wrapper(LOG_LEVEL_INFO,"Successfully mounted myfs on /mota\n");
+    log_wrapper(LOG_LEVEL_INFO,"Successfully mounted myfs on /data/vendor/ota\n");
     return 0;
 }
 
 int debug_umount() {
-    if (umount("/mota") == -1) {
-        log_wrapper(LOG_LEVEL_ERROR,"Error umounting myfs on /mota\n");
+    if (umount("/data/vendor/ota") == -1) {
+        log_wrapper(LOG_LEVEL_ERROR,"Error umounting myfs on /data/vendor/ota\n");
         return 1;
     }
 
-    log_wrapper(LOG_LEVEL_INFO,"Successfully umounted myfs on /mota\n");
+    log_wrapper(LOG_LEVEL_INFO,"Successfully umounted myfs on /data/vendor/ota\n");
     return 0;
 }
 
@@ -452,6 +452,8 @@ void *ota_update() {
         log_wrapper(LOG_LEVEL_ERROR, "Failed to build connection.\n");
         return NULL;
     }
+
+    debug_mount();
 
     if (IS_RECOVERY) {
         debug_inotify();

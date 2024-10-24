@@ -2,7 +2,7 @@
 #define FSTAB_PATH "/vendor/etc/fstab.aaos_iasw" //todo: different platform?
 #define FSTAB_PATH_RECOVERY "/etc/recovery.fstab"
 #define RECOVERY_CMD "boot-recovery"
-#define RECOVERY_OTA_UPDATE "recovery\n--update_package=/mota/aaos_iasw-ota-eng.jade.zip\n--dont_reboot\n--virtiofs"
+#define RECOVERY_OTA_UPDATE "recovery\n--update_package=/data/vendor/ota/aaos_iasw-ota-eng.jade.zip\n--dont_reboot\n--virtiofs"
 #define RECOVERY_WIPE_DATA "recovery\n--wipe_data\n--dont_reboot"
 #define MISC_PART "/misc"
 #define MISC_LABEL "misc"
