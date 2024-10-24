@@ -1,7 +1,7 @@
-From a87bbf733519193f99fd26fb3b1d3bd5d9931adc Mon Sep 17 00:00:00 2001
+From d60e0d8220cee269360512ae0d29ba3e3e3007da Mon Sep 17 00:00:00 2001
 From: "Guo, Jade" <jade.guo@intel.com>
 Date: Tue, 24 Sep 2024 17:12:31 +0800
-Subject: [PATCH] [Patch] Add ota coordinator into product.mk
+Subject: [PATCH 2/2] [Patch] Add ota coordinator into product.mk
 
 Signed-off-by: Guo, Jade <jade.guo@intel.com>
 ---
