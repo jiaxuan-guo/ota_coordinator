@@ -1,0 +1,24 @@
+From 91ca7b15c3c44fe156ed22f7e9a8160b57d8772f Mon Sep 17 00:00:00 2001
+From: "Guo, Jade" <jade.guo@intel.com>
+Date: Sat, 26 Oct 2024 00:10:01 +0800
+Subject: [PATCH] Add /ota into fstab.recovery
+
+Signed-off-by: Guo, Jade <jade.guo@intel.com>
+---
+ groups/boot-arch/project-celadon/fstab.recovery | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/groups/boot-arch/project-celadon/fstab.recovery b/groups/boot-arch/project-celadon/fstab.recovery
+index 797cf3a..969c987 100644
+--- a/groups/boot-arch/project-celadon/fstab.recovery
++++ b/groups/boot-arch/project-celadon/fstab.recovery
+@@ -35,5 +35,6 @@ system   /system  {{system_fs}} ro{{#system_fs_ext4}},barrier=1{{/system_fs_ext4
+ /dev/block/by-name/persistent   /persistent     emmc    defaults                                                    defaults
+ /dev/block/by-name/metadata     /metadata       ext4    noatime,nosuid,nodev,errors=panic                           wait,check
+ /dev/block/by-name/share_data   /mnt/share_data ext4    noatime,nosuid,nodev,noauto_da_alloc,errors=panic           wait,check,formattable
++myfs                            /ota            virtiofs  defaults                                                  defaults
+ {{/use_cic}}
+ 
+-- 
+2.34.1
+
