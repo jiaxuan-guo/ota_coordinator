@@ -26,8 +26,6 @@ int redirect_log () {
     }
 
     close(fd);
-    fprintf(stderr, "This is an error messag (test).\n");
-
     return 0;
 }
 
@@ -189,6 +187,21 @@ int debug_get_slot_info() {
 
     snprintf(log, sizeof(log), "max_index: %d, max_priority: %d \n\n",
     max_index, max_priority);
+    log_wrapper(LOG_LEVEL_INFO, log);
+    return 0;
+}
+
+int mount_on(char *source, char* target, char *fstype) {
+    char log[256];
+
+    if (mount(source, target, fstype, 0, NULL) == -1) {
+
+        snprintf(log, sizeof(log), "Error mounting %s on %s: %s\n", source, target, strerror(errno));
+        log_wrapper(LOG_LEVEL_ERROR, log);
+        return 1;
+    }
+
+    snprintf(log, sizeof(log), "Successfully mounted %s on %s\n", source, target);
     log_wrapper(LOG_LEVEL_INFO, log);
     return 0;
 }
@@ -453,7 +466,9 @@ void *ota_update() {
         return NULL;
     }
 
-    debug_mount();
+    if (!IS_RECOVERY) {
+        mount_on("myfs", "/data/vendor/ota", "virtiofs");
+    }
 
     if (IS_RECOVERY) {
         debug_inotify();
