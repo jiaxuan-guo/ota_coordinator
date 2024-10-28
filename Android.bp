@@ -17,6 +17,9 @@ cc_binary {
         "liblog",
         "libcutils",
     ],
+    init_rc: [
+        "ota_coordinator.rc",
+    ],
 }
 
 cc_binary {
