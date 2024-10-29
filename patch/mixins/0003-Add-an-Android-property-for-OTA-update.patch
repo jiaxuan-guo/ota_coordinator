@@ -1,0 +1,29 @@
+From 3d96ed225951a737cd68575f0358f7c56770064b Mon Sep 17 00:00:00 2001
+From: "Guo, Jade" <jade.guo@intel.com>
+Date: Tue, 29 Oct 2024 22:47:57 +0800
+Subject: [PATCH] Add an Android property for OTA update
+
+Add persist.vendor.ota_coordinator.last_slot_suffix and init it as "_a"
+
+Signed-off-by: Guo, Jade <jade.guo@intel.com>
+---
+ groups/boot-arch/project-celadon/product.mk | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/groups/boot-arch/project-celadon/product.mk b/groups/boot-arch/project-celadon/product.mk
+index ea088ea..5a3f3e6 100644
+--- a/groups/boot-arch/project-celadon/product.mk
++++ b/groups/boot-arch/project-celadon/product.mk
+@@ -2,6 +2,9 @@ PRODUCT_PACKAGES += \
+ 	ota_coordinator \
+ 	ota_coordinator_recovery
+ 
++PRODUCT_PROPERTY_OVERRIDES += \
++			        persist.vendor.ota_coordinator.last_slot_suffix=_a \
++
+ {{#fw_sbl}}
+ TARGET_UEFI_ARCH := i386
+ {{/fw_sbl}}
+-- 
+2.34.1
+
