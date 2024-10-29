@@ -3,7 +3,10 @@
 #include <errno.h>
 #include <sys/inotify.h>
 #define ANDROID_RB_PROPERTY "sys.powerctl"
-#define OTA_PACKAGE "/data/vendor/ota/aaos_iasw-ota-eng.jade.zip"
+#define ANDROID_OTA_PROPERTY "persist.vendor.ota_coordinator.last_slot_suffix"
+#define ANDROID_BOOT_SLOT_PROPERTY "ro.boot.slot_suffix"
+
+#define OTA_PACKAGE "/data/vendor/ota/aaos_iasw-ota.zip"
 
 // there is no logcat under recovery, redirect log to /tmp/ota_coordinator.log
 int redirect_log () {
@@ -267,7 +270,7 @@ int debug_inotify() {
     log_wrapper(LOG_LEVEL_ERROR, "debug_inotify start\n");
     fd = inotify_init();
     if (fd < 0) {
-        log_wrapper(LOG_LEVEL_ERROR, "inotify_init");
+        log_wrapper(LOG_LEVEL_ERROR, "inotify_init failed");
         return -1;
     }
     flags = fcntl(fd, F_GETFL, 0);
@@ -275,7 +278,7 @@ int debug_inotify() {
 
     wd = inotify_add_watch(fd, "/data", IN_MODIFY | IN_CREATE | IN_DELETE);
     if (wd == -1) {
-        log_wrapper(LOG_LEVEL_ERROR, "inotify_add_watch");
+        log_wrapper(LOG_LEVEL_ERROR, "inotify_add_watch failed");
         close(fd);
         return -1;
     }
@@ -460,6 +463,9 @@ void *ota_update() {
     enum RESPONSE response;
     char buf[256];
     char log[256];
+    char last_slot[PROPERTY_VALUE_MAX];
+    char curr_slot[PROPERTY_VALUE_MAX];
+    int ret;
 
     if (build_connection()!=0) {
         log_wrapper(LOG_LEVEL_ERROR, "Failed to build connection.\n");
@@ -468,6 +474,22 @@ void *ota_update() {
 
     if (!IS_RECOVERY) {
         mount_on("myfs", "/data/vendor/ota", "virtiofs");
+
+        ret = property_get(ANDROID_OTA_PROPERTY, last_slot, "0");
+        snprintf(log, sizeof(log), "%s is %s, ret value: %d", ANDROID_OTA_PROPERTY, last_slot, ret);
+        log_wrapper(LOG_LEVEL_DEBUG, log);
+
+        ret = property_get(ANDROID_BOOT_SLOT_PROPERTY, curr_slot, "0");
+        snprintf(log, sizeof(log), "%s is %s, ret value: %d", ANDROID_BOOT_SLOT_PROPERTY, curr_slot, ret);
+        log_wrapper(LOG_LEVEL_DEBUG, log);
+
+        if (strncmp(last_slot, curr_slot, 2)) {
+            ret = property_set(ANDROID_OTA_PROPERTY, curr_slot);
+            snprintf(log, sizeof(log), "Set %s as %s, ret: %d", ANDROID_OTA_PROPERTY, curr_slot, ret);
+            log_wrapper(LOG_LEVEL_DEBUG, log);
+            handle_start_install();
+            log_wrapper(LOG_LEVEL_DEBUG, "handle_start_install done");
+        }
     }
 
     if (IS_RECOVERY) {

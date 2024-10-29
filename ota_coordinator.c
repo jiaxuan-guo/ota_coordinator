@@ -3,6 +3,11 @@
 int main(int argc, char* argv[]) {
     pthread_t factory_reset_thread, ota_update_thread;
 
+    if (IS_RECOVERY) {
+        redirect_log();
+        log_wrapper(LOG_LEVEL_INFO, "redirect_log done\n");
+    }
+
     if (argc != 1 && argc != 3) {
         log_wrapper(LOG_LEVEL_INFO, "Usage:       ./ota_coordinator\n");
         log_wrapper(LOG_LEVEL_INFO, "             ./ota_coordinator <pci_read> <pci_write>\n");
@@ -13,11 +18,6 @@ int main(int argc, char* argv[]) {
 
     config.pci_read = argc==3? argv[1]:"0000:00:0f.0";
     config.pci_write = argc==3? argv[2]:"0000:00:13.0";
-
-    if (IS_RECOVERY) {
-        redirect_log();
-        log_wrapper(LOG_LEVEL_INFO, "redirect_log done\n");
-    }
 
     if (!IS_RECOVERY) {
         if (pthread_create(&factory_reset_thread, NULL, factory_reset, NULL) != 0) {
