@@ -440,12 +440,17 @@ int handle_responses(char *buf) {
         return FACTORY_RESET;
     } else if (strncmp(buf, "start_install", sizeof("start_install")-1) == 0) {
         return START_INSTALL;
-    } else if (strncmp(buf, "start_rollback", sizeof("start_rollback")-1) == 0) {
-        return ROLLBACK;
     } else if (strncmp(buf, "ota_process", sizeof("ota_process")-1) == 0) {
         return OTA_UPDATE_PROCESS;
+    } else if (strncmp(buf, "ota_done", sizeof("ota_done")-1) == 0) {
+        return OTA_UPDATE_DONE;
     } else if (strncmp(buf, "factory_reset_process", sizeof("factory_reset_process")-1) == 0) {
         return FACTORY_RESET_PROCESS;
+    } else if (strncmp(buf, "ota_abort", sizeof("ota_abort")-1) == 0) {
+        return OTA_UPDATE_ABORT;
+    // for debug purpose
+    } else if (strncmp(buf, "start_rollback", sizeof("start_rollback")-1) == 0) {
+        return DEBUG_ROLLBACK;
     } else if (strncmp(buf, "debug_slot_info", sizeof("debug_slot_info")-1) == 0) {
         return DEBUG_GET_SLOT_INFO;
     } else if (strncmp(buf, "mount", sizeof("mount")-1) == 0) {
@@ -523,16 +528,22 @@ void *ota_update() {
                 case START_INSTALL:
                     handle_start_install();
                     break;
-                case ROLLBACK:
-                    handle_rollback();
-                    break;
                 case OTA_UPDATE_PROCESS:
                     handle_ota_update_process();
+                    break;
+                case OTA_UPDATE_DONE:
+                    log_wrapper(LOG_LEVEL_INFO, "OTA update done!\n");
+                    break;
+                case OTA_UPDATE_ABORT:
+                    handle_rollback();
                     break;
                 case FACTORY_RESET_PROCESS:
                     handle_factory_reset_process();
                     break;
                 // there are for debug only
+                case DEBUG_ROLLBACK:
+                    handle_rollback();
+                    break;
                 case DEBUG_GET_SLOT_INFO:
                     debug_get_slot_info();
                     break;
