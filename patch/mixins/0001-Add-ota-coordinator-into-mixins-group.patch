@@ -1,0 +1,101 @@
+From 751298c8ac18b8ac7c68d5d9d8dd6ca8fce80c14 Mon Sep 17 00:00:00 2001
+From: Jade Guo <jade.guo@intel.com>
+Date: Tue, 12 Nov 2024 03:20:41 +0000
+Subject: [PATCH] Add ota-coordinator into mixins group
+
+Tracked-On: OAM-127157
+Signed-off-by: Jade Guo <jade.guo@intel.com>
+---
+ groups/ota-coordinator/default             |  1 +
+ groups/ota-coordinator/doc.spec            | 21 +++++++++++++++++++++
+ groups/ota-coordinator/false/empty_dir     |  0
+ groups/ota-coordinator/true/fstab.recovery |  1 +
+ groups/ota-coordinator/true/init.rc        | 10 ++++++++++
+ groups/ota-coordinator/true/product.mk     |  9 +++++++++
+ 6 files changed, 42 insertions(+)
+ create mode 120000 groups/ota-coordinator/default
+ create mode 100644 groups/ota-coordinator/doc.spec
+ create mode 100644 groups/ota-coordinator/false/empty_dir
+ create mode 100644 groups/ota-coordinator/true/fstab.recovery
+ create mode 100644 groups/ota-coordinator/true/init.rc
+ create mode 100644 groups/ota-coordinator/true/product.mk
+
+diff --git a/groups/ota-coordinator/default b/groups/ota-coordinator/default
+new file mode 120000
+index 0000000..3a0b685
+--- /dev/null
++++ b/groups/ota-coordinator/default
+@@ -0,0 +1 @@
++false/
+\ No newline at end of file
+diff --git a/groups/ota-coordinator/doc.spec b/groups/ota-coordinator/doc.spec
+new file mode 100644
+index 0000000..2ec1fe5
+--- /dev/null
++++ b/groups/ota-coordinator/doc.spec
+@@ -0,0 +1,21 @@
++=== Overview
++
++ota-coordinator is designed to coordinate SOS, Android APP, and Android native layer. It
++implements a comprehensive upgrade as well as factory reset for both SOS and VMs.
++
++==== Options
++
++--- true
++this option is used to enable ota-coordinator support
++
++    --- parameters
++    --- code dir
++
++--- false
++this option is used to disable ota-coordinator support
++
++    --- parameters
++    --- code dir
++
++--- default
++when not explicitly selected in mixin spec file, the default option(disable) will be used.
+diff --git a/groups/ota-coordinator/false/empty_dir b/groups/ota-coordinator/false/empty_dir
+new file mode 100644
+index 0000000..e69de29
+diff --git a/groups/ota-coordinator/true/fstab.recovery b/groups/ota-coordinator/true/fstab.recovery
+new file mode 100644
+index 0000000..76dc09a
+--- /dev/null
++++ b/groups/ota-coordinator/true/fstab.recovery
+@@ -0,0 +1 @@
++myfs                            /ota            virtiofs  defaults                                                  defaults
+diff --git a/groups/ota-coordinator/true/init.rc b/groups/ota-coordinator/true/init.rc
+new file mode 100644
+index 0000000..be80ef4
+--- /dev/null
++++ b/groups/ota-coordinator/true/init.rc
+@@ -0,0 +1,10 @@
++service ota_coordinator /vendor/bin/ota_coordinator
++    user root
++    class core
++    socket ota_socket stream 666 system system
++    oneshot
++    disabled
++
++on boot
++    start ota_coordinator
++    mkdir /data/vendor/ota 660 system system
+diff --git a/groups/ota-coordinator/true/product.mk b/groups/ota-coordinator/true/product.mk
+new file mode 100644
+index 0000000..9ae32e1
+--- /dev/null
++++ b/groups/ota-coordinator/true/product.mk
+@@ -0,0 +1,9 @@
++PRODUCT_PACKAGES += \
++	ota_coordinator \
++	ota_coordinator_recovery
++
++
++PRODUCT_PROPERTY_OVERRIDES += \
++	persist.vendor.ota_coordinator.last_slot_suffix=_a \
++	vendor.ota_coordinator.factory_reset=false \
++
+-- 
+2.43.0
+

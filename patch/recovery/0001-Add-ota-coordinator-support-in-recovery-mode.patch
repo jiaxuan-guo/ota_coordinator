@@ -1,0 +1,213 @@
+From 92f3b384b34921c930c5a8a16b95a0b30c1b0622 Mon Sep 17 00:00:00 2001
+From: Jade Guo <jade.guo@intel.com>
+Date: Thu, 7 Nov 2024 03:13:45 +0000
+Subject: [PATCH] Add ota coordinator support in recovery mode
+
+1. Start ota coordinator on boot time in recovery mode
+2. Add a parameter --dont_reboot. Once added, system won't directly reboot after OTA
+update is done.
+3. Add a parameter --virtiofs. Once added, system will mount virtiofs before OTA update.
+4. Log and save ota_status of factory reset progress.
+
+Tracked-On: OAM-127157
+Signed-off-by: Jade Guo <jade.guo@intel.com>
+---
+ etc/init.rc                       |  9 +++++
+ install/include/install/install.h |  1 +
+ recovery.cpp                      | 62 +++++++++++++++++++++++++++++++
+ recovery_utils/roots.cpp          |  2 +-
+ 4 files changed, 73 insertions(+), 1 deletion(-)
+
+diff --git a/etc/init.rc b/etc/init.rc
+index c7ff2b2b..5e366b4c 100644
+--- a/etc/init.rc
++++ b/etc/init.rc
+@@ -49,7 +49,16 @@ on init
+     # Start essential services
+     start servicemanager
+ 
++service ota_coordinator_recovery /system/bin/ota_coordinator_recovery
++    user root
++    class core
++    oneshot
++    seclabel u:r:shell:s0
++
+ on boot
++    start ota_coordinator_recovery
++    mkdir /ota
++
+     ifup lo
+     hostname localhost
+     domainname localdomain
+diff --git a/install/include/install/install.h b/install/include/install/install.h
+index 0f5102f8..19bc9776 100644
+--- a/install/include/install/install.h
++++ b/install/include/install/install.h
+@@ -37,6 +37,7 @@ enum InstallResult {
+   INSTALL_RETRY,
+   INSTALL_KEY_INTERRUPTED,
+   INSTALL_REBOOT,
++  INSTALL_DONE,
+ };
+ 
+ enum class OtaType {
+diff --git a/recovery.cpp b/recovery.cpp
+index 5ef038ba..af26a221 100644
+--- a/recovery.cpp
++++ b/recovery.cpp
+@@ -26,7 +26,10 @@
+ #include <stdlib.h>
+ #include <string.h>
+ #include <sys/types.h>
++#include <sys/mount.h>
+ #include <unistd.h>
++#include <iostream>
++#include <fstream>
+ 
+ #include <functional>
+ #include <iterator>
+@@ -87,6 +90,8 @@ static bool save_current_log = false;
+  *   --show_text - show the recovery text menu, used by some bootloader (e.g. http://b/36872519).
+  *   --set_encrypted_filesystem=on|off - enables / diasables encrypted fs
+  *   --just_exit - do nothing; exit and reboot
++ *   --dont_reboot - stop the machine from rebooting if install_success, this is for OTA coordinator
++ *   --virtiofs mount virtiofs before get the package, this is for OTA coordinator
+  *
+  * After completing, we remove /cache/recovery/command and reboot.
+  * Arguments may also be supplied in the bootloader control block (BCB).
+@@ -380,6 +385,10 @@ static Device::BuiltinAction PromptAndWait(Device* device, InstallResult status)
+         // after installing a package.
+         LOG(FATAL) << "Invalid status code of INSTALL_REBOOT";
+         break;
++      case INSTALL_DONE:
++        LOG(INFO) << "INSTALL_DONE ui->SetBackground(RecoveryUI::NONE";
++        ui->SetBackground(RecoveryUI::NONE);
++        break;
+     }
+     ui->SetProgressType(RecoveryUI::EMPTY);
+ 
+@@ -599,6 +608,32 @@ static void log_failure_code(ErrorCode code, const std::string& update_package)
+   LOG(INFO) << log_content;
+ }
+ 
++int write_ota_status(InstallResult data) {
++    const std::string filename = "/data/ota_status";
++
++    std::ofstream file(filename);
++    if (!file.is_open()) {
++        std::cerr << "Failed to open file: " << filename << std::endl;
++        return 1;
++    }
++
++    file << "ota_status=" << data;
++    if (file.fail()) {
++        std::cerr << "Failed to write to file: " << filename << std::endl;
++        file.close();
++        return 1;
++    }
++
++    file.close();
++    if (file.fail()) {
++        std::cerr << "Failed to close file: " << filename << std::endl;
++        return 1;
++    }
++
++    std::cout << "Data written to " << filename << " successfully." << std::endl;
++    return 0;
++}
++
+ Device::BuiltinAction start_recovery(Device* device, const std::vector<std::string>& args) {
+   static constexpr struct option OPTIONS[] = {
+     { "fastboot", no_argument, nullptr, 0 },
+@@ -619,6 +654,8 @@ Device::BuiltinAction start_recovery(Device* device, const std::vector<std::stri
+     { "wipe_cache", no_argument, nullptr, 0 },
+     { "wipe_data", no_argument, nullptr, 0 },
+     { "wipe_package_size", required_argument, nullptr, 0 },
++    { "dont_reboot", no_argument, nullptr, 0 },
++    { "virtiofs", no_argument, nullptr, 0 },
+     { nullptr, 0, nullptr, 0 },
+   };
+ 
+@@ -636,6 +673,8 @@ Device::BuiltinAction start_recovery(Device* device, const std::vector<std::stri
+   bool shutdown_after = false;
+   int retry_count = 0;
+   bool security_update = false;
++  bool dont_reboot = false;
++  bool virtiofs = false;
+   std::string locale;
+ 
+   auto args_to_parse = StringVectorToNullTerminatedArray(args);
+@@ -685,6 +724,10 @@ Device::BuiltinAction start_recovery(Device* device, const std::vector<std::stri
+           should_wipe_data = true;
+         } else if (option == "wipe_package_size") {
+           android::base::ParseUint(optarg, &wipe_package_size);
++        } else if (option == "dont_reboot") {
++          dont_reboot = true;
++        } else if (option == "virtiofs") {
++          virtiofs = true;
+         }
+         break;
+       }
+@@ -737,6 +780,15 @@ Device::BuiltinAction start_recovery(Device* device, const std::vector<std::stri
+     // to log the update attempt since update_package is non-NULL.
+     save_current_log = true;
+ 
++    // mount virtiofs if necessary
++    if (virtiofs) {
++      if (mount("myfs", "/ota", "virtiofs", 0, NULL) == -1) {
++          ui->Print("Error mounting myfs on /ota\n");
++      } else {
++        ui->Print("Successfully mounted myfs on /ota\n");
++      }
++    }
++
+     if (int required_battery_level; retry_count == 0 && !IsBatteryOk(&required_battery_level)) {
+       ui->Print("battery capacity is not enough for installing package: %d%% needed\n",
+                 required_battery_level);
+@@ -762,6 +814,8 @@ Device::BuiltinAction start_recovery(Device* device, const std::vector<std::stri
+       } else if (install_with_fuse || should_use_fuse) {
+         LOG(INFO) << "Installing package " << update_package << " with fuse";
+         status = InstallWithFuseFromPath(update_package, device);
++        LOG(INFO) << "OTA Coordinator got status, which is " << status <<"\n";
++        write_ota_status(status);
+       } else if (auto memory_package = Package::CreateMemoryPackage(
+                      update_package,
+                      std::bind(&RecoveryUI::SetProgress, ui, std::placeholders::_1));
+@@ -806,6 +860,8 @@ Device::BuiltinAction start_recovery(Device* device, const std::vector<std::stri
+     if (!WipeData(device)) {
+       status = INSTALL_ERROR;
+     }
++    LOG(INFO) << "OTA Coodinator got status, which is " << status <<"\n";
++    write_ota_status(status);
+   } else if (should_prompt_and_wipe_data) {
+     // Trigger the logging to capture the cause, even if user chooses to not wipe data.
+     save_current_log = true;
+@@ -871,6 +927,12 @@ Device::BuiltinAction start_recovery(Device* device, const std::vector<std::stri
+   //  - In all other cases, reboot the device. Therefore, normal users will observe the device
+   //    rebooting a) immediately upon successful finish (INSTALL_SUCCESS); or b) an "error" screen
+   //    for 5s followed by an automatic reboot.
++  if (status == INSTALL_SUCCESS && dont_reboot) {
++    status = INSTALL_NONE;
++    LOG(INFO) << "OTA Coordinator rewrote INSTALL_SUCCESS as INSTALL_NONE :)\n";
++    ui->Print("OTA status: INSTALL_SUCCESS\n");
++  }
++
+   if (status != INSTALL_REBOOT) {
+     if (status == INSTALL_NONE || ui->IsTextVisible()) {
+       auto temp = PromptAndWait(device, status);
+diff --git a/recovery_utils/roots.cpp b/recovery_utils/roots.cpp
+index 5c95cba0..6b2f160e 100644
+--- a/recovery_utils/roots.cpp
++++ b/recovery_utils/roots.cpp
+@@ -304,7 +304,7 @@ int setup_install_mounts() {
+       continue;
+     }
+ 
+-    if (entry.mount_point == "/tmp" || entry.mount_point == "/cache") {
++    if (entry.mount_point == "/tmp" || entry.mount_point == "/cache" || entry.mount_point == "/ota") {
+       if (ensure_path_mounted(entry.mount_point) != 0) {
+         LOG(ERROR) << "Failed to mount " << entry.mount_point;
+         return -1;
+-- 
+2.43.0
+
