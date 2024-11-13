@@ -478,7 +478,7 @@ void *ota_update() {
     }
 
     if (!IS_RECOVERY) {
-        mount_on("myfs", "/data/vendor/ota", "virtiofs");
+        // mount_on("myfs", "/data/vendor/ota", "virtiofs");
 
         ret = property_get(ANDROID_OTA_PROPERTY, last_slot, "0");
         snprintf(log, sizeof(log), "%s is %s, ret value: %d", ANDROID_OTA_PROPERTY, last_slot, ret);
