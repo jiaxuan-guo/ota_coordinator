@@ -1,6 +1,5 @@
 #include "ota_coordinator.h"
 
-#include <errno.h>
 #include <sys/inotify.h>
 #define ANDROID_RB_PROPERTY "sys.powerctl"
 #define ANDROID_OTA_PROPERTY "persist.vendor.ota_coordinator.last_slot_suffix"
@@ -10,31 +9,14 @@
 
 // there is no logcat under recovery, redirect log to /tmp/ota_coordinator.log
 int redirect_log () {
-    int fd = open("/tmp/ota_coordinator.log", O_WRONLY | O_CREAT | O_APPEND, 0644);
-    if (fd == -1) {
-        perror("open");
-        return -1;
-    }
+    recovery_log_fd = open("/tmp/ota_coordinator.log", O_WRONLY | O_CREAT | O_APPEND, 0644);
 
-    if (dup2(fd, STDOUT_FILENO) == -1) {
-        perror("dup2");
-        close(fd);
-        return -1;
-    }
-
-    if (dup2(fd, STDERR_FILENO) == -1) {
-        perror("dup2");
-        close(fd);
-        return -1;
-    }
-
-    close(fd);
     return 0;
 }
 
 void log_wrapper(LogLevel level, const char *log) {
     if (IS_RECOVERY) {
-        fprintf(stderr, "%s", log);
+        write(recovery_log_fd, log, strlen(log));
     } else {
         switch (level) {
             case LOG_LEVEL_DEBUG:
@@ -231,11 +213,13 @@ int debug_umount() {
 
 int get_ota_status(int *status) {
     char line[256];
-    FILE *file = fopen("/data/ota_status", "r");
+    FILE *file = fopen("/tmp/ota_status", "r");
     char log[256];
+
     log_wrapper(LOG_LEVEL_INFO, "get_ota_status start\n");
     if (file == NULL) {
-        log_wrapper(LOG_LEVEL_ERROR,"Failed to open /data/ota_status\n");
+        snprintf(log, sizeof(log), "Failed to open /tmp/ota_status: %s\n", strerror(errno));
+        log_wrapper(LOG_LEVEL_ERROR, log);
         return -1;
     }
 
@@ -276,7 +260,7 @@ int debug_inotify() {
     flags = fcntl(fd, F_GETFL, 0);
     fcntl(fd, F_SETFL, flags | O_NONBLOCK);
 
-    wd = inotify_add_watch(fd, "/data", IN_MODIFY | IN_CREATE | IN_DELETE);
+    wd = inotify_add_watch(fd, "/tmp", IN_MODIFY | IN_CREATE | IN_DELETE);
     if (wd == -1) {
         log_wrapper(LOG_LEVEL_ERROR, "inotify_add_watch failed");
         close(fd);

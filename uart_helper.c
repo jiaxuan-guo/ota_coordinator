@@ -87,19 +87,22 @@ void config_uart(int fd, int isICANON) {
 }
 
 int build_connection() {
+    char log[256];
     // open both read and write tty devices
     if (find_tty_by_pci_addr() == 0) {
-        ALOGD("\n<config>\npci_read:%s  tty_read:%s \npci_write:%s  tty_write:%s\n",
+        snprintf(log, sizeof(log), "\n<config>\npci_read:%s  tty_read:%s \npci_write:%s  tty_write:%s\n",
         config.pci_read, config.tty_read, config.pci_write, config.tty_write);
-
+        log_wrapper(LOG_LEVEL_INFO, log);
         config.fd_read = open(config.tty_read, O_RDWR | O_NOCTTY);
         if (config.fd_read == -1) {
-            log_wrapper(LOG_LEVEL_ERROR, "open fd_read");
+            snprintf(log, sizeof(log), "open fd_read: %s\n", strerror(errno));
+            log_wrapper(LOG_LEVEL_ERROR, log);
             return -1;
         }
         config.fd_write = open(config.tty_write, O_RDWR | O_NOCTTY);
         if (config.fd_write == -1) {
-            log_wrapper(LOG_LEVEL_ERROR, "open fd_write");
+            snprintf(log, sizeof(log), "open fd_write: %s\n", strerror(errno));
+            log_wrapper(LOG_LEVEL_ERROR, log);
             return -1;
         }
     } else {

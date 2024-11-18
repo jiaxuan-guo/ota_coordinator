@@ -14,6 +14,7 @@
 #include "bootloader_message.h"
 #include <sys/mount.h>
 #include <pthread.h>
+#include <errno.h>
 
 #define IS_RECOVERY (access("/system/bin/recovery", F_OK) == 0)
 #define LOG_TAG "ota_coordinator"
@@ -117,3 +118,5 @@ int debug_inotify();
 //server
 void *factory_reset();
 void *ota_update();
+
+int recovery_log_fd;
