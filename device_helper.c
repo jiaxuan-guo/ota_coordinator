@@ -3,6 +3,7 @@
 #define FSTAB_PATH_RECOVERY "/etc/recovery.fstab"
 #define RECOVERY_CMD "boot-recovery"
 #define RECOVERY_OTA_UPDATE "recovery\n--update_package=/ota/aaos_iasw-ota.zip\n--dont_reboot\n--virtiofs"
+#define RECOVERY_OTA_FAKE_UPDATE "recovery\n--dont_reboot\n--fake_update"
 #define RECOVERY_WIPE_DATA "recovery\n--wipe_data\n--dont_reboot"
 #define MISC_PART "/misc"
 #define MISC_LABEL "misc"
@@ -168,7 +169,7 @@ int write_data_to_bcb(enum OPERATION operation) {
     log_wrapper(LOG_LEVEL_INFO, log);
 
     if (get_bootloader_message(&boot, misc_blk_device)==-1) {
-        log_wrapper(LOG_LEVEL_ERROR, "Failed to get_misc_blk_device\n");
+        log_wrapper(LOG_LEVEL_ERROR, "Failed to get_bootloader_message\n");
         return -1;
     }
     snprintf(log, sizeof(log), "<get before bebootloader message>\nboot.command: %s, boot.status: %s,\
@@ -188,6 +189,9 @@ int write_data_to_bcb(enum OPERATION operation) {
         if (operation == OTA_UPDATE) {
             strlcpy(boot.command, RECOVERY_CMD, sizeof(RECOVERY_CMD));
             strlcpy(boot.recovery, RECOVERY_OTA_UPDATE, sizeof(RECOVERY_OTA_UPDATE));
+        } else if (operation == OTA_FAKE_UPDATE) {
+            strlcpy(boot.command, RECOVERY_CMD, sizeof(RECOVERY_CMD));
+            strlcpy(boot.recovery, RECOVERY_OTA_FAKE_UPDATE, sizeof(RECOVERY_OTA_FAKE_UPDATE));
         } else if (operation == WIPE_DATA) {
             strlcpy(boot.command, RECOVERY_CMD, sizeof(RECOVERY_CMD));
             strlcpy(boot.recovery, RECOVERY_WIPE_DATA, sizeof(RECOVERY_WIPE_DATA));
@@ -198,7 +202,7 @@ int write_data_to_bcb(enum OPERATION operation) {
         }
         // check and log
         if (get_bootloader_message(&boot, misc_blk_device)==-1) {
-            log_wrapper(LOG_LEVEL_ERROR, "Failed to get_misc_blk_device\n");
+            log_wrapper(LOG_LEVEL_ERROR, "Failed to get_bootloader_message\n");
             return -1;
         }
         snprintf(log, sizeof(log), "<get after bebootloader message>\nboot.command: %s, boot.status: %s,\

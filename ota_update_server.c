@@ -2,15 +2,17 @@
 
 #include <sys/inotify.h>
 #define ANDROID_RB_PROPERTY "sys.powerctl"
-#define ANDROID_OTA_PROPERTY "persist.vendor.ota_coordinator.last_slot_suffix"
+#define ANDROID_OTA_LAST_SLOT_PROPERTY "persist.vendor.ota_coordinator.last_slot_suffix"
+#define ANDROID_OTA_FAKE_UPDATE_PROPERTY "persist.vendor.ota_coordinator.fake_update"
 #define ANDROID_BOOT_SLOT_PROPERTY "ro.boot.slot_suffix"
 
-#define OTA_PACKAGE "/data/vendor/ota/aaos_iasw-ota.zip"
+#define OTA_PACKAGE_PATH "/data/vendor/ota"
+#define OTA_PACKAGE_FILENAME "aaos_iasw-ota.zip"
+#define OTA_PACKAGE OTA_PACKAGE_PATH "/" OTA_PACKAGE_FILENAME
 
 // there is no logcat under recovery, redirect log to /tmp/ota_coordinator.log
 int redirect_log () {
     recovery_log_fd = open("/tmp/ota_coordinator.log", O_WRONLY | O_CREAT | O_APPEND, 0644);
-
     return 0;
 }
 
@@ -63,10 +65,10 @@ int handle_start_ota() {
 }
 
 int handle_start_factory_reset() {
-    if (send_message(config.fd_write, "need_to_factory_reset\n")) {
-        log_wrapper(LOG_LEVEL_ERROR, "send need_to_factory_reset failed!\n");
-        return -1;
-    }
+        if (send_message(config.fd_write, "need_to_factory_reset\n")) {
+            log_wrapper(LOG_LEVEL_ERROR, "send need_to_factory_reset failed!\n");
+            return -1;
+        }
     return 0;
 }
 
@@ -100,7 +102,7 @@ int do_shutdown() {
     }
 }
 
-// notify SOS and shutdown
+// Notify SOS and shutdown
 int notify_and_shutdown() {
     usleep(3000000);
     if (send_message(config.fd_write, "vm_shutdown\n")) {
@@ -110,24 +112,30 @@ int notify_and_shutdown() {
     return do_shutdown();
 }
 
-//All VMs set the next boot target as recovery, notify SOS, shutdown
+// All VMs set the next boot target as recovery, notify SOS, shutdown
 int handle_ota_package_ready() {
-    write_data_to_bcb(OTA_UPDATE);
+    FILE *file = fopen(OTA_PACKAGE, "r");
+    int ret;
+
+    if (file) {
+        // If Android OTA package exist, do OTA update
+        fclose(file);
+        write_data_to_bcb(OTA_UPDATE);
+    } else {
+        // else, return success directly.
+        ret = property_set(ANDROID_OTA_FAKE_UPDATE_PROPERTY, "1");
+        write_data_to_bcb(OTA_FAKE_UPDATE);
+    }
     return notify_and_shutdown();
 }
 
-// install the package and send the notification to SOS
-int handle_start_install() {
-    // todo: start to install the package
-
-
+// Send the notification to SOS
+int handle_install_done() {
     // installed well
     if (send_message(config.fd_write, "successful\n")) {
         log_wrapper(LOG_LEVEL_ERROR, "send successful failed!\n");
         return -1;
     }
-
-    //todo: installed failed, ignore for now
     return 0;
 }
 
@@ -146,7 +154,7 @@ int debug_get_slot_info() {
     log_wrapper(LOG_LEVEL_INFO, log);
 
     if (get_bootloader_message_ab(&boot_ab, misc_blk_device)==-1) {
-        log_wrapper(LOG_LEVEL_ERROR, "Failed to get_misc_blk_device\n");
+        log_wrapper(LOG_LEVEL_ERROR, "Failed to get_bootloader_message_ab\n");
         return -1;
     }
     snprintf(log, sizeof(log), "bootloader_ctrl.magic: 0x%x, boot.nb_slot: %d, \n\n",
@@ -341,7 +349,7 @@ int handle_rollback() {
     log_wrapper(LOG_LEVEL_INFO, log);
 
     if (get_bootloader_message_ab(&boot_ab, misc_blk_device)==-1) {
-        log_wrapper(LOG_LEVEL_ERROR, "Failed to get_misc_blk_device\n");
+        log_wrapper(LOG_LEVEL_ERROR, "Failed to get_bootloader_message_ab\n");
         return -1;
     }
     snprintf(log, sizeof(log), "bootloader_ctrl.magic: 0x%x, boot.nb_slot: %d, \n\n",
@@ -383,7 +391,7 @@ int handle_rollback() {
         return -1;
     }
     if (get_bootloader_message_ab(&boot_ab, misc_blk_device)==-1) {
-        log_wrapper(LOG_LEVEL_ERROR, "Failed to get_misc_blk_device\n");
+        log_wrapper(LOG_LEVEL_ERROR, "Failed to get_bootloader_message_ab\n");
         return -1;
     }
     // For each slot
@@ -452,6 +460,7 @@ void *ota_update() {
     enum RESPONSE response;
     char buf[256];
     char log[256];
+    char is_fake_update[PROPERTY_VALUE_MAX];
     char last_slot[PROPERTY_VALUE_MAX];
     char curr_slot[PROPERTY_VALUE_MAX];
     int ret;
@@ -462,10 +471,17 @@ void *ota_update() {
     }
 
     if (!IS_RECOVERY) {
-        // mount_on("myfs", "/data/vendor/ota", "virtiofs");
+        ret = property_get(ANDROID_OTA_FAKE_UPDATE_PROPERTY, is_fake_update, "0");
+        snprintf(log, sizeof(log), "%s is %s, ret value: %d", ANDROID_OTA_FAKE_UPDATE_PROPERTY, is_fake_update, ret);
+        log_wrapper(LOG_LEVEL_DEBUG, log);
+        if (strncmp(is_fake_update, "1", 1) == 0) {
+            ret = property_set(ANDROID_OTA_FAKE_UPDATE_PROPERTY, "0");
+            handle_install_done();
+            log_wrapper(LOG_LEVEL_DEBUG, "handle_install_done done");
+        }
 
-        ret = property_get(ANDROID_OTA_PROPERTY, last_slot, "0");
-        snprintf(log, sizeof(log), "%s is %s, ret value: %d", ANDROID_OTA_PROPERTY, last_slot, ret);
+        ret = property_get(ANDROID_OTA_LAST_SLOT_PROPERTY, last_slot, "0");
+        snprintf(log, sizeof(log), "%s is %s, ret value: %d", ANDROID_OTA_LAST_SLOT_PROPERTY, last_slot, ret);
         log_wrapper(LOG_LEVEL_DEBUG, log);
 
         ret = property_get(ANDROID_BOOT_SLOT_PROPERTY, curr_slot, "0");
@@ -473,11 +489,11 @@ void *ota_update() {
         log_wrapper(LOG_LEVEL_DEBUG, log);
 
         if (strncmp(last_slot, curr_slot, 2)) {
-            ret = property_set(ANDROID_OTA_PROPERTY, curr_slot);
-            snprintf(log, sizeof(log), "Set %s as %s, ret: %d", ANDROID_OTA_PROPERTY, curr_slot, ret);
+            ret = property_set(ANDROID_OTA_LAST_SLOT_PROPERTY, curr_slot);
+            snprintf(log, sizeof(log), "Set %s as %s, ret: %d", ANDROID_OTA_LAST_SLOT_PROPERTY, curr_slot, ret);
             log_wrapper(LOG_LEVEL_DEBUG, log);
-            handle_start_install();
-            log_wrapper(LOG_LEVEL_DEBUG, "handle_start_install done");
+            handle_install_done();
+            log_wrapper(LOG_LEVEL_DEBUG, "handle_install_done done");
         }
     }
 
@@ -510,7 +526,7 @@ void *ota_update() {
                     handle_factory_reset();
                     break;
                 case START_INSTALL:
-                    handle_start_install();
+                    handle_install_done();
                     break;
                 case OTA_UPDATE_PROCESS:
                     handle_ota_update_process();

@@ -67,6 +67,7 @@ enum RESPONSE{
 
 enum OPERATION{
     OTA_UPDATE=0,
+    OTA_FAKE_UPDATE,
     WIPE_DATA
 };
 
@@ -105,7 +106,7 @@ int is_boot_cmd_empty(bootloader_message* boot);
 int isprint(int c);
 int notify_and_shutdown();
 int handle_ota_package_not_ready();
-int handle_start_install();
+int handle_install_done();
 int handle_start_factory_reset();
 int do_shutdown();
 int redirect_log ();
